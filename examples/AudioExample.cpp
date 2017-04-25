@@ -69,7 +69,6 @@ int main(int argc, char** argv)
     
     while (1)
     {
-        
         aGrab >> aFh;
                  // MP2 sub-pipe
                  aFh >> aEnc_1 >> aStream_1;
