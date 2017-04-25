@@ -24,7 +24,6 @@ protected:
 
     FFMPEGMuxerAudioImpl(bool startMuxingSoon = false)
     {
-
         mAudioStream = avformat_new_stream(FFMPEGMuxerCommonImpl<Container>::mMuxerContext, NULL);
         if (!mAudioStream)
             printAndThrowUnrecoverableError("mAudioStream = avformat_new_stream(...)");
@@ -75,7 +74,6 @@ protected:
 
         if (startMuxingSoon)
             this->startMuxing();
-
     }
 
     ~FFMPEGMuxerAudioImpl()
