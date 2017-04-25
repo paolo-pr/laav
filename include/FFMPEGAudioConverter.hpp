@@ -178,7 +178,6 @@ public:
     {
         if (mMediaStatusInPipe == MEDIA_READY)
             audioEncoder.mMediaStatusInPipe = MEDIA_READY;
-
         else
         {
             audioEncoder.mMediaStatusInPipe = mMediaStatusInPipe;
