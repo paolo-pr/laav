@@ -20,7 +20,7 @@ The library currently runs on Linux, but a Windows port is planned (any contribu
 while (1)
 {
     // Pipe
-    videoGrabber >> videoConverter >> vEncoder >> videoStreamer;
+    videoGrabber >> videoConverter >> videoEncoder >> videoStreamer;
     
     // Audio-video events catcher
     eventsCatcher->catchNextEvent();
