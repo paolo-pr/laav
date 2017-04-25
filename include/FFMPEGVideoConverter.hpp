@@ -29,6 +29,7 @@ template <typename InputVideoFrameFormat,
           unsigned int outputHeigth>
 class FFMPEGVideoConverter
 {
+          
 public:
 
     FFMPEGVideoConverter():
