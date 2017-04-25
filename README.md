@@ -10,7 +10,7 @@ A header-only C++ library for capturing audio and video from multiple live sourc
 * streaming (HTTP - MPEGTS/MATROSKA)
 * image processing
 
-The library currently runs on Linux, but a Windows port is planned (any contribution is welcome!)
+The library currently runs on Linux (ALSA and V4L2 devices), but a Windows port is planned (any contribution is welcome!)
 
 ## FEATURES
 
