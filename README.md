@@ -57,6 +57,6 @@ See the provided [EXAMPLES](https://github.com/paolo-pr/laav/tree/master/example
 
 * Error/exception handling must be less generic and will be developed/improved ASAP (according to my spare time, which is never enough...). A doc/example about how to manage errors will be added as well.
 * Add a RTSP/RTP streaming server.
-* Windows port (basically, it will consist in creating Windows based classes corresponding to ALSAGrabber and V4L2Grabber, with the same API, and few other things: any contribution is welcome!).
+* Windows port (basically, it will consist in creating Windows based classes corresponding to the ALSAGrabber and V4L2Grabber classes, with the same API, and few other things: any contribution is welcome!).
 * MPEGTS-MJPEG is currently NOT supported.
 * Add a demuxer/player (Any contribution is welcome!).
