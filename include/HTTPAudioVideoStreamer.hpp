@@ -79,7 +79,6 @@ public:
             {
                 // DO next step
             }
-
         }
     }
 
@@ -94,7 +93,6 @@ private:
         {
             mAudioVideoMuxer.stopMuxing();
         }
-
     }
 
     void hTTPConnectionCallBack(struct evhttp_request* clientRequest,
