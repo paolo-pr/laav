@@ -2,7 +2,7 @@
 
 ## ABOUT
 
-A header-only C++ library for capturing audio and video from multiple live sources (cameras and microphones) and
+A header-only **C++** library for capturing audio and video from multiple live sources (cameras and microphones) and
 
 * encoding (video: **H264**, audio: **AAC**, **MP2**)
 * transcoding (video **MJPEG** -> **H264**)
