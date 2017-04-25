@@ -36,7 +36,8 @@ while (1)
         
 ## BUILDING / RUNNING
 
-Dependencies: ffmpeg >= 3.2.4) (tested with 3.2.4 version), libevent and pkg-config (optional; see the compile command below).
+Dependencies: FFMPEG >= 3.2.4 (tested with 3.2.4 version), libevent and pkg-config (optional; see the compile command below).
+FFMPEG must be compiled with x264 support.
 
 * Just include headers as shown in the examples, in YourProgram.cpp and execute:
 ```
