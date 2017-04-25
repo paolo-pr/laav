@@ -6,8 +6,8 @@ A header-only C++ library for capturing audio and video from multiple live sourc
 
 * encoding (video: **H264**, audio: **AAC**, **MP2**)
 * transcoding (video **MJPEG** -> **H264**)
-* recording to file (**MPEGTS** and/or **MATROSKA** audio and/or video)
-* streaming (**HTTP - MPEGTS/MATROSKA**)
+* recording to file (**MPEGTS** and **MATROSKA** audio and/or video)
+* streaming (**HTTP - MPEGTS / MATROSKA**)
 * image processing
 
 The library currently runs on **Linux** (ALSA and V4L2 devices), but a Windows port is planned (any contribution is welcome!);
