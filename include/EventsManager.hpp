@@ -239,10 +239,10 @@ class EventsManager
 
 public:
 
-static SharedEventsCatcher createSharedEventsCatcher()
-{
-    return SharedEventsCatcher(new EventsCatcher());
-}
+    static SharedEventsCatcher createSharedEventsCatcher()
+    {
+        return SharedEventsCatcher(new EventsCatcher());
+    }
 
 };
 
