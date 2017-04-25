@@ -113,7 +113,6 @@ int main(int argc, char** argv)
 
     while (1)
     {
-
         aGrab >> aConv >> aEnc >> aFh;
                                   aFh >> aStream_1;
                                   aFh >> aStream_2;
@@ -130,7 +129,6 @@ int main(int argc, char** argv)
                  vFh_1 >> avStream_2;
 
         eventsCatcher->catchNextEvent();
-
     }
 
     return 0;
