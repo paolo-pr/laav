@@ -7,10 +7,10 @@ A header-only C++ library for capturing audio and video from multiple live sourc
 * encoding (video: **H264**, audio: **AAC**, **MP2**)
 * transcoding (video **MJPEG** -> **H264**)
 * recording to file (**MPEGTS** and/or **MATROSKA** audio and/or video)
-* streaming (HTTP - **MPEGTS/MATROSKA**)
+* streaming (**HTTP - MPEGTS/MATROSKA**)
 * image processing
 
-The library currently runs on Linux (ALSA and V4L2 devices), but a Windows port is planned (any contribution is welcome!);
+The library currently runs on **Linux** (ALSA and V4L2 devices), but a Windows port is planned (any contribution is welcome!);
 it has been tested with [VLC](http://www.videolan.org/) and [FFPLAY](https://ffmpeg.org/) media players.
 
 The library is useful for building **video surveillance** systems as well, consisting in media servers which stream and record at the same time and which can be controlled through HTTP commands (see [THIS](https://github.com/paolo-pr/laav/blob/master/examples/VideoExample_2.cpp) example)
