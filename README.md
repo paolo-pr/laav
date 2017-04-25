@@ -39,7 +39,7 @@ while (1)
 
 ## COMPILING / RUNNING
 
-Dependencies: [FFMPEG](https://ffmpeg.org/) >= 3.2.4 (tested with 3.2.4 version), libevent and pkg-config (optional; see the compile command below).
+Dependencies: [FFMPEG](https://ffmpeg.org/) >= 3.2.4 (tested with 3.2.4 version), libevent and pkg-config (optional: see the compile command below).
 [FFMPEG](https://ffmpeg.org/) must be compiled with x264 support.
 
 * Just include the library headers, as shown in the examples, in YourProgram.cpp and execute:
