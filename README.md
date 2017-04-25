@@ -15,7 +15,8 @@ The library currently runs on Linux, but a windows porting is planned (any contr
 ## FEATURES
 
 * All the audio/video tasks are made with strictly asynchronous multiple pipes, inside one main loop. This allows to create simple, short, easy to read and intuitive code in which all the pipes can be realized through overloaded operators, in the following form:
-...
+
+```
 while (1)
 {
     // Pipe
@@ -24,7 +25,8 @@ while (1)
     // Audio-video events catcher
     eventsCatcher->catchNextEvent();
 }
-...
+```
+
 * Threads are not used at all and they are intentionally discouraged in order to avoid that they can be improperly used for decoupling tasks, instead of taking advantage from multi-core systems.
 * All the audio/video modules are strongly templated and all their possible concatenations are checked at compile-time, so to avoid inconsistent pipes.
 *All the pipes are safe at runtime. I.E: when a source is disconnected or temporarily unavailable, the main loop can continue without necessarily having to check errors (they can be checked, anyway, by polling the status of each node)
