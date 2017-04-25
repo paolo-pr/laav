@@ -136,7 +136,6 @@ public:
     operator >>
     (HTTPVideoStreamer<Container, CodecOrFormat, width, height>& httpVideoStreamer)
     {
-
         try
         {
             httpVideoStreamer.takeStreamableFrame(get());
