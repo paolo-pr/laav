@@ -47,7 +47,7 @@ Dependencies: **[FFMPEG](https://ffmpeg.org/)** >= 3.2.4 (tested with 3.2.4 vers
 g++ -Wall -std=c++11 -DLINUX -o YourProgram YourProgram.cpp `pkg-config --libs libavformat libavcodec libavutil libswresample libswscale libevent alsa`
 ```
 * Execute ./CompileExamples for compiling the provided examples.
-* API documentation in html format can be created by executing, inside the doxy directory:
+* API documentation in HTML format can be created by executing, inside the doxy directory:
 ```
 doxygen Doxyfile
 ```
