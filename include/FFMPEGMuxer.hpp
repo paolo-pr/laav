@@ -153,7 +153,6 @@ protected:
 
     void muxNextUsefulFrameFromBuffer(bool resetChunks)
     {
-
         AVPacket& audioPktToMux = mAudioAVPktsToMux[mLastMuxedAudioFrameOffset];
         AVPacket& videoPktToMux = mVideoAVPktsToMux[mLastMuxedVideoFrameOffset];
 
