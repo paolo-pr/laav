@@ -31,7 +31,7 @@ while (1)
 * All the audio/video modules are strongly templated and all their possible concatenations are checked at compile-time, so to avoid inconsistent pipes.
 * All the pipes are safe at runtime. I.E: when a source is disconnected or temporarily unavailable, the main loop can continue without necessarily having to check errors (they can be checked, anyway, by polling the status of each node)
 * The library is all RAII-designed (basically it safely wraps Libav, V4L and ALSA) and the user doesn't have to bother with pointers and memory.
-* The public API is intended to be intuitive, with few self-explanatory functions (see the Doxy pages).
+* The public API is intended to be intuitive, with few self-explanatory functions.
 
 ## COMPILING / RUNNING
 
@@ -43,6 +43,10 @@ FFMPEG must be compiled with x264 support.
 g++ -Wall -std=c++11 -DLINUX -o YourProgram YourProgram.cpp `pkg-config --libs libavformat libavcodec libavutil libswresample libswscale libevent alsa`
 ```
 * Execute ./CompileExamples for compiling the provided examples.
+* API documentation in html format can be created by executing, inside the doxy directory:
+```
+doxygen Doxyfile
+```
 
 ## HOW TO USE IT
 
