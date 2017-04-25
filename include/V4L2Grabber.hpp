@@ -265,7 +265,6 @@ public:
     operator >>
     (FFMPEGVideoMuxer<Container, CodecOrFormat, width, height>& videoMuxer)
     {
-
         try
         {
             videoMuxer.takeMuxableFrame(grabNextFrame());
@@ -392,6 +391,7 @@ private:
                     return;
             }
         }
+        
         if (mLatency == 0)
         {
             mLatency = av_gettime_relative() - mGrabbingStartTime;
@@ -402,8 +402,8 @@ private:
 
             mLatency = (monotimeNow.tv_sec * 1000000000 + monotimeNow.tv_nsec) -
             (buf.timestamp.tv_sec * 1000000000 + buf.timestamp.tv_usec * 1000);
-
         }
+        
         mStatus = V4L_DEVICE_GRABBING;
 
         memcpy(mEncodedFramesBuffer[mEncodedFramesBufferOffset], 
@@ -430,7 +430,6 @@ private:
             mUnrecoverableState = true;
             return;
         }
-
     }
 
     /*!
@@ -462,6 +461,7 @@ private:
                 return;
             }
         }
+        
         if (mLatency == 0)
         {
             mLatency = av_gettime_relative() - mGrabbingStartTime;
@@ -475,6 +475,7 @@ private:
             (buf.timestamp.tv_sec * 1000000000 + buf.timestamp.tv_usec * 1000);
 
         }
+        
         mStatus = V4L_DEVICE_GRABBING;
         videoFrame.assignDataSharedPtr(mBuffersFormVideoFrame[buf.index]);
         videoFrame.setSize(buf.bytesused);
@@ -490,7 +491,6 @@ private:
             mUnrecoverableState = true;
             return;
         }
-
     }
 
     bool startCapturing()
@@ -771,7 +771,6 @@ private:
         mFd = -1;
         while (mBuffersFormVideoFrame.size() > 0)
             mBuffersFormVideoFrame.pop_back();
-
     }
 
     void eventCallBack(int fd, enum EventType eventType)
