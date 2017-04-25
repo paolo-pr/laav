@@ -21,7 +21,6 @@ protected:
 
     FFMPEGMuxerVideoImpl(bool startMuxingSoon = false)
     {
-
         mVideoStream = avformat_new_stream(FFMPEGMuxerCommonImpl<Container>::mMuxerContext, NULL);
         if (!mVideoStream)
             printAndThrowUnrecoverableError("mVideoStream = avformat_new_stream(...)");
@@ -69,7 +68,6 @@ protected:
      */
     void takeMuxableFrame(const VideoFrame<VideoCodecOrFormat, width, height>& videoFrameToMux)
     {
-
         if (isFrameEmpty(videoFrameToMux))
             throw MediaException(MEDIA_NO_DATA);
 
