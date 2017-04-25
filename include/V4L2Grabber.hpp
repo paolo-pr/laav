@@ -281,9 +281,10 @@ public:
     FFMPEGAudioVideoMuxer<Container,
                           CodecOrFormat, width, height,
                           AudioCodec, audioSampleRate, audioChannels>&
-    operator >> (FFMPEGAudioVideoMuxer<Container,
-                                       CodecOrFormat, width, height,
-                                       AudioCodec, audioSampleRate, audioChannels>& audioVideoMuxer)
+    operator >> 
+    (FFMPEGAudioVideoMuxer<Container,
+                           CodecOrFormat, width, height,
+                           AudioCodec, audioSampleRate, audioChannels>& audioVideoMuxer)
     {
         try
         {
