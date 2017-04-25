@@ -34,7 +34,7 @@ while (1)
 * The public API is intended to be intuitive, with few self-explanatory functions (see the Doxy pages). In order to learn how to use the library, just read the provided examples.
 
         
-## BUILDING / RUNNING
+## COMPILING / RUNNING
 
 Dependencies: FFMPEG >= 3.2.4 (tested with 3.2.4 version), libevent and pkg-config (optional; see the compile command below).
 FFMPEG must be compiled with x264 support.
