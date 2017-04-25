@@ -55,7 +55,6 @@ public:
             printAndThrowUnrecoverableError("mDecodedLibAVFrame = av_frame_alloc()");
 
         setDecodedFrameSizes(mDecodedVideoFrame);
-
     }
 
     ~FFMPEGMJPEGDecoder()
@@ -69,7 +68,6 @@ public:
      */
     VideoFrame<YUV422_PLANAR, width, height>& decode(const EncodedVideoFrame& encodedVideoFrame)
     {
-
         AVPacket tempPkt;
         av_init_packet(&tempPkt);
 
