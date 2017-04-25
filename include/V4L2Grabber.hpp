@@ -473,7 +473,6 @@ private:
 
             mLatency = (monotimeNow.tv_sec * 1000000000 + monotimeNow.tv_nsec) -
             (buf.timestamp.tv_sec * 1000000000 + buf.timestamp.tv_usec * 1000);
-
         }
         
         mStatus = V4L_DEVICE_GRABBING;
@@ -556,7 +555,6 @@ private:
 
         if (req.count < 2)
         {
-
             mStatus = INSUFFICIENT_BUFFER_MEMORY_ERROR;
             mUnrecoverableState = true;
             return false;
@@ -642,7 +640,6 @@ private:
 
         if (mFps != 0)
         {
-
             struct v4l2_streamparm param;
             CLEAR(param);
             param.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
