@@ -31,7 +31,7 @@ while (1)
 * All the audio/video modules are strongly templated and all their possible concatenations are checked at compile-time, so to avoid inconsistent pipes.
 * All the pipes are safe at runtime. I.E: when a source is disconnected or temporarily unavailable, the main loop can continue without necessarily having to check errors (they can be checked, anyway, by polling the status of each node)
 * The library is all RAII-designed (basically it safely wraps Libav, V4L and ALSA) and the user doesn't have to bother with pointers and memory.
-* The public API is intended to be intuitive, with few self-explanatory functions (see the Doxy pages). In order to learn how to use the library, just read the provided examples.
+* The public API is intended to be intuitive, with few self-explanatory functions (see the Doxy pages).
 
 ## HOW TO USE IT
 
