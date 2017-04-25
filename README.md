@@ -38,11 +38,11 @@ while (1)
 
 Dependencies: ffmpeg >= 3.2.4) (tested with 3.2.4 version), libevent and pkg-config (optional; see the compile command below).
 
-Just include headers as shown in the examples, in YourProgram.cpp and execute:
+* Just include headers as shown in the examples, in YourProgram.cpp and execute:
 ```
 g++ -Wall -std=c++11 -DLINUX -o YourProgram YourProgram.cpp `pkg-config --libs libavformat libavcodec libavutil libswresample libswscale libevent alsa`
 ```
-Execute ./CompileExamples for compiling the provided examples.
+* Execute ./CompileExamples for compiling the provided examples.
         
 
 ## TODO
