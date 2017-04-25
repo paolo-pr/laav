@@ -33,6 +33,9 @@ while (1)
 * The library is all RAII-designed (basically it safely wraps Libav, V4L and ALSA) and the user doesn't have to bother with pointers and memory.
 * The public API is intended to be intuitive, with few self-explanatory functions (see the Doxy pages). In order to learn how to use the library, just read the provided examples.
 
+## HOW TO USE IT
+
+See the provided [EXAMPLES](https://github.com/paolo-pr/laav/tree/master/examples)
         
 ## COMPILING / RUNNING
 
