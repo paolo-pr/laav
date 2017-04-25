@@ -29,7 +29,7 @@ while (1)
 
 * Threads are not used at all and they are intentionally discouraged in order to avoid that they can be improperly used for decoupling tasks, instead of taking advantage from multi-core systems.
 * All the audio/video modules are strongly templated and all their possible concatenations are checked at compile-time, so to avoid inconsistent pipes.
-*All the pipes are safe at runtime. I.E: when a source is disconnected or temporarily unavailable, the main loop can continue without necessarily having to check errors (they can be checked, anyway, by polling the status of each node)
+* All the pipes are safe at runtime. I.E: when a source is disconnected or temporarily unavailable, the main loop can continue without necessarily having to check errors (they can be checked, anyway, by polling the status of each node)
 * The library is all RAII-designed (basically it safely wraps Libav, V4L and ALSA) and the user doesn't have to bother with pointers and memory.
 * The public API is intended to be intuitive, with few self-explanatory functions (see the Doxy pages). In order to learn how to use the library, just read the provided examples.
 
@@ -49,6 +49,6 @@ g++ -Wall -std=c++11 -DLINUX -o YourProgram YourProgram.cpp `pkg-config --libs l
 
 * Error/exception handling is currently generic and will be developed/improved ASAP (according to my spare time, which is never enough...). 
 * Add a RTSP/RTP streaming server.
-* Windows port (basically, it will consist in creating Windows based classes corresponding to ALSAGrabber and V4L2Grabber, with the same API, and few other things: Any contribution is welcome!).
+* Windows port (basically, it will consist in creating Windows based classes corresponding to ALSAGrabber and V4L2Grabber, with the same API, and few other things: any contribution is welcome!).
 * MPEGTS-MJPEG is currently NOT supported.
 * Add a demuxer/player (Any contribution is welcome!).
