@@ -11,7 +11,7 @@ A header-only C++ library for capturing audio and video from multiple live sourc
 * image processing
 
 The library currently runs on **Linux** (ALSA and V4L2 devices), but a Windows port is planned (any contribution is welcome!);
-it has been tested with [VLC](http://www.videolan.org/) and [FFPLAY](https://ffmpeg.org/) media players.
+it has been tested with **[VLC](http://www.videolan.org/)** and **[FFPLAY](https://ffmpeg.org/)** media players.
 
 The library is useful for building **video surveillance** systems as well, consisting in media servers which stream and record at the same time and which can be controlled through HTTP commands (see [THIS](https://github.com/paolo-pr/laav/blob/master/examples/VideoExample_2.cpp) example)
 
@@ -39,8 +39,8 @@ while (1)
 
 ## COMPILING / RUNNING
 
-Dependencies: [FFMPEG](https://ffmpeg.org/) >= 3.2.4 (tested with 3.2.4 version), **[libevent](http://libevent.org/)** and pkg-config (optional: see the compile command below).
-[FFMPEG](https://ffmpeg.org/) must be compiled with x264 support.
+Dependencies: **[FFMPEG](https://ffmpeg.org/)** >= 3.2.4 (tested with 3.2.4 version), **[libevent](http://libevent.org/)** and pkg-config (optional: see the compile command below).
+**[FFMPEG](https://ffmpeg.org/)** must be compiled with **x264** support.
 
 * Just include the library headers, as shown in the examples, in YourProgram.cpp and execute:
 ```
@@ -54,7 +54,7 @@ doxygen Doxyfile
 
 ## HOW TO USE IT
 
-See the provided [EXAMPLES](https://github.com/paolo-pr/laav/tree/master/examples)
+See the provided **[EXAMPLES](https://github.com/paolo-pr/laav/tree/master/examples)**
 
 ## TODO
 
