@@ -189,7 +189,6 @@ int convertToFFMPEGProfile(enum H264Profiles profile)
         break;
     }
     return ret;
-
 }
 
 int convertToFFMPEGProfile(enum AACProfiles profile)
@@ -227,7 +226,6 @@ int convertToFFMPEGProfile(enum AACProfiles profile)
         break;
     }
     return ret;
-
 }
 
 const char* convertToFFMPEGPreset(enum H264Presets preset)
