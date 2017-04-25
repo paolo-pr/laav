@@ -448,7 +448,7 @@ private:
             {
             case EAGAIN:
                 // Should not happen (because
-                // already catched by the events manager)... anyway...
+                // already caught by the events manager)... anyway...
                 throw MediaException(MEDIA_NO_DATA);
             case EIO:
             // Could ignore EIO, see spec
