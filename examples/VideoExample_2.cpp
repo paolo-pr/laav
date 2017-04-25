@@ -101,7 +101,12 @@ int main(int argc, char** argv)
         // Begin the video pipe and hold grabbed frames in vFh
         vGrab >> vFh1;
 
-        // Draw a green rectangle on holded frames
+        /* 
+         * Draw a green rectangle on holded frames.
+         * The try/catch block ensures that frames are accessed
+         * only when they are actually available (-> event caught) 
+         * on the pipe
+         */
         try
         {
             VideoFrame<YUYV422_PACKED, WIDTH, HEIGHT>& grabbedFrame = vFh1.get();
