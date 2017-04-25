@@ -42,7 +42,6 @@ public:
         FFMPEGMuxerAudioImpl<Container, AudioCodecOrFormat,
                              audioSampleRate, audioChannels>(startMuxingSoon)
     {
-
         this->mMuxAudio = true;
         this->mMuxVideo = true;
         FFMPEGMuxerCommonImpl<Container>::completeMuxerInitialization();
