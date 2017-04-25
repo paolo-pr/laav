@@ -41,7 +41,7 @@ while (1)
 Dependencies: **[FFMPEG](https://ffmpeg.org/)** >= 3.2.4 (tested with 3.2.4 version), **[libevent](http://libevent.org/)** and pkg-config (optional: see the compile command below).
 **[FFMPEG](https://ffmpeg.org/)** must be compiled with **[x264](http://www.videolan.org/developers/x264.html)** support.
 
-* Include the library headers, as shown in the **[EXAMPLES](https://github.com/paolo-pr/laav/tree/master/examples)**, in YourProgram.cpp and execute:
+* Include the library headers, as shown in the [examples](https://github.com/paolo-pr/laav/tree/master/examples), in YourProgram.cpp and execute:
 ```
 g++ -Wall -std=c++11 -DLINUX -o YourProgram YourProgram.cpp `pkg-config --libs libavformat libavcodec libavutil libswresample libswscale libevent alsa`
 ```
