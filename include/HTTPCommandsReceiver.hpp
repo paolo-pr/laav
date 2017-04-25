@@ -46,7 +46,6 @@ private:
     void hTTPConnectionCallBack(struct evhttp_request* clientRequest,
                                 struct evhttp_connection* clientConnection)
     {
-
         struct evbuffer* inputBuf = evhttp_request_get_input_buffer(clientRequest);
         std::string data(evbuffer_get_length(inputBuf), ' ');
         evbuffer_copyout(inputBuf, &data[0], data.size());
