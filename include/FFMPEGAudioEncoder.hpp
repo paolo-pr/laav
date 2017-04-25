@@ -135,7 +135,6 @@ public:
                 mEncodedAVPacketBufferOffset =
                 (mEncodedAVPacketBufferOffset + 1) % mEncodedAudioFrameBuffer.size();
 
-
                 if ((mRawInputLibAVFrameBufferOffset + periodSize) % bufferSize != 0)
                 {
                     copyRawAudioFrameDataToLibAVFrameData
