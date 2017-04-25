@@ -10,7 +10,8 @@ A header-only C++ library for capturing audio and video from multiple live sourc
 * streaming (HTTP - MPEGTS/MATROSKA)
 * image processing
 
-The library currently runs on Linux (ALSA and V4L2 devices), but a Windows port is planned (any contribution is welcome!)
+The library currently runs on Linux (ALSA and V4L2 devices), but a Windows port is planned (any contribution is welcome!);
+it has been tested with [VLC](http://www.videolan.org/) and [FFPLAY](https://ffmpeg.org/) media players.
 
 ## FEATURES
 
@@ -35,8 +36,8 @@ while (1)
 
 ## COMPILING / RUNNING
 
-Dependencies: FFMPEG >= 3.2.4 (tested with 3.2.4 version), libevent and pkg-config (optional; see the compile command below).
-FFMPEG must be compiled with x264 support.
+Dependencies: [FFMPEG](https://ffmpeg.org/) >= 3.2.4 (tested with 3.2.4 version), libevent and pkg-config (optional; see the compile command below).
+[FFMPEG](https://ffmpeg.org/) must be compiled with x264 support.
 
 * Just include the library headers, as shown in the examples, in YourProgram.cpp and execute:
 ```
