@@ -38,7 +38,7 @@ while (1)
 Dependencies: FFMPEG >= 3.2.4 (tested with 3.2.4 version), libevent and pkg-config (optional; see the compile command below).
 FFMPEG must be compiled with x264 support.
 
-* Just include headers as shown in the examples, in YourProgram.cpp and execute:
+* Just include the library headers, as shown in the examples, in YourProgram.cpp and execute:
 ```
 g++ -Wall -std=c++11 -DLINUX -o YourProgram YourProgram.cpp `pkg-config --libs libavformat libavcodec libavutil libswresample libswscale libevent alsa`
 ```
