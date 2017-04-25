@@ -34,7 +34,6 @@ public:
     FFMPEGVideoConverter():
         mMediaStatusInPipe(MEDIA_NOT_READY)
     {
-
         static_assert( ((inputWidth >= outputWidth) && (inputHeigth >= outputHeigth)),
                        "(inputWidth <= outputWidth) && (inputHeigth <= outputHeigth) == false");
         // TODO add other static asserts for not allowed conversions
@@ -266,7 +265,6 @@ private:
 
     void specializedConvert(const Planar3RawVideoFrame& inputVideoFrame)
     {
-
         mInputLibAVFrame->data[0] = (uint8_t*)inputVideoFrame.plane<0>();
         mInputLibAVFrame->data[1] = (uint8_t*)inputVideoFrame.plane<1>();
         mInputLibAVFrame->data[2] = (uint8_t*)inputVideoFrame.plane<2>();
