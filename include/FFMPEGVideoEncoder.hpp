@@ -146,7 +146,6 @@ private:
 
     void doEncode()
     {
-
         if (this->mEncodingStartTime == 0)
             this->mEncodingStartTime = av_gettime_relative();
 
@@ -214,7 +213,6 @@ private:
 
         this->mInternalPtsBufferOffset =
         (this->mInternalPtsBufferOffset + 1) % this->mEncodedVideoFrameBuffer.size();
-
     }
 
     int64_t mLatency;
