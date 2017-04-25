@@ -1,0 +1,62 @@
+/* 
+ * Created (25/04/2017) by Paolo-Pr.
+ * For conditions of distribution and use, see the accompanying LICENSE file.
+ *
+ */
+
+#ifndef USERPARAMS_HPP_INCLUDED
+#define USERPARAMS_HPP_INCLUDED
+
+namespace laav
+{
+
+enum AACProfiles
+{
+    AAC_DEFAULT_PROFILE,
+    AAC_ELD,
+    AAC_HE,
+    AAC_HE_V2,
+    AAC_LD,
+    AAC_LOW,
+    AAC_LTP,
+    AAC_MAIN,
+    AAC_SSR
+};
+
+enum H264Profiles
+{
+    H264_DEFAULT_PROFILE,
+    H264_BASELINE,
+    H264_CONSTRAINED_BASELINE,
+    H264_MAIN,
+    H264_EXTENDED,
+    H264_HIGH,
+    H264_HIGH_10,
+    H264_HIGH_10_INTRA,
+    H264_MULTIVIEW_HIGH,
+    H264_HIGH_422,
+    H264_HIGH_422_INTRA,
+    H264_STEREO_HIGH,
+    H264_HIGH_444,
+    H264_HIGH_444_PREDICTIVE,
+    H264_HIGH_444_INTRA,
+    H264_CAVLC_444
+};
+
+enum H264Presets
+{
+    H264_DEFAULT_PRESET,
+    H264_ULTRAFAST,
+    H264_SUPERFAST,
+    H264_VERY_FAST,
+    H264_FASTER,
+    H264_FAST,
+    H264_MEDIUM,
+    H264_SLOW,
+    H264_SLOWER,
+    H264_PLACEBO
+};
+
+}
+
+#endif // USERPARAMS_HPP_INCLUDED
