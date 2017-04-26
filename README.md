@@ -7,7 +7,7 @@ A header-only **C++** library for capturing audio and video from multiple live s
 * encoding (video: **H264**, audio: **AAC**, **MP2**)
 * decoding (video: **MJPEG**) / transcoding (video: **MJPEG** -> **H264**)
 * recording to file (**MPEGTS** and **MATROSKA** containers, audio and/or video)
-* streaming (**HTTP** protocol for both **MPEGTS** and **MATROSKA** containers)
+* streaming (**HTTP** protocol for **MPEGTS** and **MATROSKA** containers)
 * image processing
 
 The library is useful for building **video surveillance** systems as well, consisting in media servers which stream and record at the same time and which can be controlled through HTTP commands (see **[THIS](https://github.com/paolo-pr/laav/blob/master/examples/VideoExample_2.cpp)** example).
