@@ -23,7 +23,7 @@
  *
  * 3) recoverable errors (i.e: a device is disconnected)
  *   --> the error doesn't cause the program to terminate and it can be polled; the node
- *   which caused the error is put into an idle mode until it is ready to perform its task
+ *   which caused the error is put into an idle state until it is ready to perform its task
  *   again (disconnection -> reconnection)
  *
  * 4) exceptions: see VideoExample_2.cpp
