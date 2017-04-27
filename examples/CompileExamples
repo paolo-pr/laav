@@ -4,7 +4,8 @@ deps=`pkg-config --libs libavformat libavcodec libavutil libswresample libswscal
 
 cd $(dirname $0)
 
-g++ -Wall -std=c++11 -DLINUX -o AudioVideoExample AudioVideoExample.cpp -I ../include $deps
+g++ -Wall -std=c++11 -DLINUX -o AudioVideoExample_1 AudioVideoExample_1.cpp -I ../include $deps
+g++ -Wall -std=c++11 -DLINUX -o AudioVideoExample_2 AudioVideoExample_2.cpp -I ../include $deps
 g++ -Wall -std=c++11 -DLINUX -o AudioExample AudioExample.cpp -I ../include $deps
 g++ -Wall -std=c++11 -DLINUX -o VideoExample_1 VideoExample_1.cpp -I ../include $deps
 g++ -Wall -std=c++11 -DLINUX -o VideoExample_2 VideoExample_2.cpp -I ../include $deps

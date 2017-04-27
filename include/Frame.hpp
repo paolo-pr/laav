@@ -51,7 +51,7 @@ public:
     Frame():
         mTimeBase(AV_TIME_BASE_Q),
         mLibAVFlags(0),
-        // TODO: don't use the FFMPEG AV_NOPTS_VALUE field
+        // TODO: don't use the FFMPEG no value field
         mMonotonicTs(AV_NOPTS_VALUE),
         mDateTs(-1)
     {

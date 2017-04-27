@@ -1,4 +1,4 @@
-/* 
+/*
  * Created (25/04/2017) by Paolo-Pr.
  * For conditions of distribution and use, see the accompanying LICENSE file.
  *
@@ -35,13 +35,14 @@ public:
     void takeStreamableFrame(const VideoFrame<VideoCodecOrFormat,
                              width, height>& videoFrameToStream)
     {
-        mVideoMuxer.takeMuxableFrame(videoFrameToStream);
+        if (this->mStatus == MEDIA_READY)
+            mVideoMuxer.takeMuxableFrame(videoFrameToStream);
     }
 
     void streamMuxedData()
     {
 
-        if (this->mClientConnectionsAndRequests.size() != 0)
+        if (this->mClientConnectionsAndRequests.size() != 0 && this->mStatus == MEDIA_READY)
         {
             try
             {

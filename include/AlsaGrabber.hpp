@@ -1,4 +1,4 @@
-/* 
+/*
  * Created (25/04/2017) by Paolo-Pr.
  * For conditions of distribution and use, see the accompanying LICENSE file.
  *
@@ -41,8 +41,9 @@ snd_pcm_format_t AlsaUtils::translateSoundFormat<FLOAT_PACKED>()
     return SND_PCM_FORMAT_FLOAT;
 }
 
-enum AlsaDeviceStatus
+enum AlsaDeviceError
 {
+    ALSA_NO_ERROR,
     SET_SND_PCM_ACCESS_RW_INTERLEAVED_ERROR,
     NOT_POLLABLE_DEVICE_ERROR,
     SET_SND_PCM_FORMAT_ERROR,
@@ -50,14 +51,9 @@ enum AlsaDeviceStatus
     SET_SAMPLE_RATE_ERROR,
     SET_PERIOD_SIZE_ERROR,
     SET_PCM_HW_PARAMS_ERROR,
-    OUTPUT_FILE_ERROR,
     SND_PCM_START_ERROR,
-    ALSA_OPEN_DEVICE_ERROR,
-    ALSA_CLOSE_DEVICE_ERROR,
-    ALSA_DEVICE_INITIALIZING,
-    ALSA_DEVICE_DISCONNECTED,
-    ALSA_DEVICE_CONFIGURED,
-    ALSA_DEVICE_GRABBING
+    ALSA_DEV_DISCONNECTED,
+    ALSA_OPEN_DEVICE_ERROR
 };
 
 template <typename CodecOrFormat, unsigned int audioSampleRate, enum AudioChannels audioChannels>
@@ -69,12 +65,17 @@ public:
     AlsaGrabber(SharedEventsCatcher eventsCatcher,
                 const std::string& devName, snd_pcm_uframes_t samplesPerPeriod = 0):
         EventsProducer::EventsProducer(eventsCatcher),
-        mStatus(ALSA_DEVICE_INITIALIZING),
+        mAlsaError(ALSA_NO_ERROR),
+        mStatus(DEV_INITIALIZING),
+        mErrno(0),
         mUnrecoverableState(false),
         mPollFds(NULL),
         mDevName(devName),
         mSamplesAvaible(false)
     {
+
+        snd_lib_error_set_handler(dontPrintErrors);
+
         if (samplesPerPeriod == 0)
             mSamplesPerPeriod = 64;
         else
@@ -121,11 +122,17 @@ public:
             if (snd_pcm_state(mAlsaDevHandle) == SND_PCM_STATE_DISCONNECTED)
             {
                 closeDevice();
-                mStatus = ALSA_DEVICE_DISCONNECTED;
+                mStatus = DEV_DISCONNECTED;
+                mAlsaError = ALSA_DEV_DISCONNECTED;
+                mErrno = errno;
                 throw MediaException(MEDIA_NO_DATA);
             }
             else
-                mStatus = ALSA_DEVICE_GRABBING;
+            {
+                mAlsaError = ALSA_NO_ERROR;
+                mErrno = 0;
+                mStatus = DEV_CAN_GRAB;
+            }
 
             observeEventsOn(mPollFds[0].fd);
             snd_pcm_uframes_t availableSamples = snd_pcm_avail(mAlsaDevHandle);
@@ -204,18 +211,81 @@ public:
         return audioConverter;
     }
 
-    enum AlsaDeviceStatus status() const
+    enum AlsaDeviceError getAlsaError() const
+    {
+        return mAlsaError;
+    }
+
+    int getErrno() const
+    {
+        return mErrno;
+    }
+
+    std::string getAlsaErrorString() const
+    {
+        std::string ret = "";
+        switch(mAlsaError)
+        {
+        case ALSA_NO_ERROR:
+            ret = "ALSA_NO_ERROR";
+            break;
+        case SET_SND_PCM_ACCESS_RW_INTERLEAVED_ERROR:
+            ret = "SET_SND_PCM_ACCESS_RW_INTERLEAVED_ERROR";
+            break;
+        case NOT_POLLABLE_DEVICE_ERROR:
+            ret = "NOT_POLLABLE_DEVICE_ERROR";
+            break;
+        case SET_SND_PCM_FORMAT_ERROR:
+            ret = "SET_SND_PCM_FORMAT_ERROR";
+            break;
+        case SET_AUDIO_CHANNELS_ERROR:
+            ret = "SET_AUDIO_CHANNELS_ERROR";
+            break;
+        case SET_SAMPLE_RATE_ERROR:
+            ret = "SET_SAMPLE_RATE_ERROR";
+            break;
+        case SET_PERIOD_SIZE_ERROR:
+            ret = "SET_PERIOD_SIZE_ERROR";
+            break;
+        case SET_PCM_HW_PARAMS_ERROR:
+            ret = "SET_PCM_HW_PARAMS_ERROR";
+            break;
+        case SND_PCM_START_ERROR:
+            ret = "SND_PCM_START_ERROR";
+            break;
+        case ALSA_DEV_DISCONNECTED:
+            ret = "ALSA_DEV_DISCONNECTED";
+            break;
+        case ALSA_OPEN_DEVICE_ERROR:
+            ret = "ALSA_OPEN_DEVICE_ERROR";
+            break;
+        }
+        return ret;
+    }
+
+    enum DeviceStatus status() const
     {
         return mStatus;
     }
 
+    bool isInUnrecoverableState() const
+    {
+        return mUnrecoverableState;
+    }
+
 private:
+
+    static void dontPrintErrors(const char *file, int line, const char *function, int err, const char *fmt, ...)
+    {
+    }
+
 
     bool openDevice()
     {
         if (snd_pcm_open(&mAlsaDevHandle, mDevName.c_str(), SND_PCM_STREAM_CAPTURE, 0) < 0)
         {
-            mStatus = ALSA_OPEN_DEVICE_ERROR;
+            mAlsaError = ALSA_OPEN_DEVICE_ERROR;
+            mErrno = errno;
             return false;
         }
 
@@ -223,7 +293,8 @@ private:
 
         if ((count = snd_pcm_poll_descriptors_count (mAlsaDevHandle)) <= 0)
         {
-            mStatus = NOT_POLLABLE_DEVICE_ERROR;
+            mAlsaError = NOT_POLLABLE_DEVICE_ERROR;
+            mErrno = errno;
             mUnrecoverableState = true;
             return false;
         }
@@ -231,6 +302,8 @@ private:
         mPollFds = (pollfd* )malloc(sizeof(struct pollfd) * count);
         snd_pcm_poll_descriptors(mAlsaDevHandle, mPollFds, count);
         makePollable(mPollFds[0].fd);
+        mAlsaError = ALSA_NO_ERROR;
+        mErrno = 0;
         return true;
     }
 
@@ -242,20 +315,23 @@ private:
         snd_pcm_hw_params_any(mAlsaDevHandle, mHWparams);
         if (snd_pcm_hw_params_set_access(mAlsaDevHandle, mHWparams, SND_PCM_ACCESS_RW_INTERLEAVED) != 0)
         {
-            mStatus = SET_SND_PCM_ACCESS_RW_INTERLEAVED_ERROR;
+            mAlsaError = SET_SND_PCM_ACCESS_RW_INTERLEAVED_ERROR;
+            mErrno = errno;
             mUnrecoverableState = true;
             return false;
         }
         if (snd_pcm_hw_params_set_format(mAlsaDevHandle, mHWparams,
                                          AlsaUtils::translateSoundFormat<CodecOrFormat>()) != 0)
         {
-            mStatus = SET_SND_PCM_FORMAT_ERROR;
+            mAlsaError = SET_SND_PCM_FORMAT_ERROR;
+            mErrno = errno;
             mUnrecoverableState = true;
             return false;
         }
         if (snd_pcm_hw_params_set_channels(mAlsaDevHandle, mHWparams, (audioChannels + 1)) != 0)
         {
-            mStatus = SET_AUDIO_CHANNELS_ERROR;
+            mAlsaError = SET_AUDIO_CHANNELS_ERROR;
+            mErrno = errno;
             mUnrecoverableState = true;
             return false;
         }
@@ -263,23 +339,35 @@ private:
         val = audioSampleRate;
         if (snd_pcm_hw_params_set_rate_near(mAlsaDevHandle, mHWparams, &val, &dir) != 0)
         {
-            mStatus = SET_SAMPLE_RATE_ERROR;
+            mAlsaError = SET_SAMPLE_RATE_ERROR;
+            mErrno = errno;
             mUnrecoverableState = true;
             return false;
         }
 
+        snd_pcm_uframes_t periodSize = mSamplesPerPeriod;
         if (snd_pcm_hw_params_set_period_size_near(mAlsaDevHandle,  mHWparams,
-                                                   &mSamplesPerPeriod, &dir) != 0)
+                                                   &periodSize, &dir) != 0)
         {
-            mStatus = SET_PERIOD_SIZE_ERROR;
+            mAlsaError = SET_PERIOD_SIZE_ERROR;
+            mErrno = errno;
             mUnrecoverableState = true;
             return false;
         }
+
+        snd_pcm_hw_params_get_period_size(mHWparams, &periodSize, &dir);
+        if (periodSize != mSamplesPerPeriod)
+            std::cerr << "[ALSAGrabber] WARNING: actual period size is set to: "
+            << periodSize << ", which differs from wanted period size: "
+            << mSamplesPerPeriod << "\n";
+
+        mSamplesPerPeriod = periodSize;
 
         // write the params to the driver
         if (snd_pcm_hw_params(mAlsaDevHandle, mHWparams) < 0)
         {
-            mStatus = SET_PCM_HW_PARAMS_ERROR;
+            mAlsaError = SET_PCM_HW_PARAMS_ERROR;
+            mErrno = errno;
             mUnrecoverableState = true;
             return false;
         }
@@ -289,7 +377,9 @@ private:
         mCapturedRawAudioDataPtr = new unsigned char[periodBufferSize*2]();
         fillAudioFrame(mCapturedRawAudioFrame);
         observeEventsOn(mPollFds[0].fd);
-        mStatus = ALSA_DEVICE_CONFIGURED;
+        mStatus = DEV_CONFIGURED;
+        mAlsaError = ALSA_NO_ERROR;
+        mErrno = 0;
         return true;
     }
 
@@ -297,12 +387,16 @@ private:
     {
         if (snd_pcm_start(mAlsaDevHandle) != 0)
         {
+            mAlsaError = SND_PCM_START_ERROR;
+            mErrno = errno;
             mUnrecoverableState = true;
             return false;
         }
         else
         {
-            mStatus = ALSA_DEVICE_GRABBING;
+            mStatus = DEV_CAN_GRAB;
+            mAlsaError = ALSA_NO_ERROR;
+            mErrno = 0;
             return true;
         }
     }
@@ -337,7 +431,9 @@ private:
         dontObserveEventsOn(mPollFds[0].fd);
     }
 
-    enum AlsaDeviceStatus mStatus;
+    enum AlsaDeviceError mAlsaError;
+    enum DeviceStatus mStatus;
+    int mErrno;
     bool mUnrecoverableState;
     unsigned char* mCapturedRawAudioDataPtr;
     AudioFrame<CodecOrFormat, audioSampleRate, audioChannels> mCapturedRawAudioFrame;

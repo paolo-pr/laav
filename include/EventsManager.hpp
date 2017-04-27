@@ -1,4 +1,4 @@
-/* 
+/*
  * Created (25/04/2017) by Paolo-Pr.
  * For conditions of distribution and use, see the accompanying LICENSE file.
  *
@@ -135,17 +135,18 @@ protected:
         mObservedEventContainers2[fd] = eventContainer;
     }
 
-    void makeHTTPServerPollable(const std::string& address, const std::string& location, int port)
+    bool makeHTTPServerPollable(const std::string& address, const std::string& location, int port)
     {
         struct evhttp* httpEventContainer = evhttp_new(mEventsCatcher.get()->libeventEventBase());
         if (evhttp_bind_socket(httpEventContainer, address.c_str(), port) != 0)
-            printAndThrowUnrecoverableError
-            ("evhttp_bind_socket(httpEventContainer, address.c_str(), port)");
+            return false;
         if (evhttp_set_cb(httpEventContainer, location.c_str(),
             libEventHTTPConnectionCallBack, this) != 0)
             printAndThrowUnrecoverableError
             ("evhttp_set_cb(...)");
         mObservedHTTPEventContainers[port] = httpEventContainer;
+
+        return true;
     }
 
     void observeEventsOn(int fd)

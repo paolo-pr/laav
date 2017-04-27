@@ -1,4 +1,4 @@
-/* 
+/*
  * Created (25/04/2017) by Paolo-Pr.
  * For conditions of distribution and use, see the accompanying LICENSE file.
  *
@@ -36,47 +36,13 @@ extern "C"
 }
 
 #define CLEAR(x) memset(&(x), 0, sizeof(x))
+
 namespace laav
 {
 
-struct V4LUtils
+enum V4LDeviceError
 {
-    template <typename T>
-    static const __u32 translatePixelFormat();
-
-    // TODO remove
-    static void printError(const char *s)
-    {
-        fprintf(stderr, "%s error %d, %s\n", s, errno, strerror(errno));
-    }
-
-    static int xioctl(int fh, unsigned long int request, void *arg)
-    {
-        int r;
-        do
-        {
-            r = ioctl(fh, request, arg);
-        }
-        while (-1 == r && EINTR == errno);
-
-        return r;
-    }
-
-};
-
-template <>
-const __u32 V4LUtils::translatePixelFormat<YUYV422_PACKED>()
-{
-    return V4L2_PIX_FMT_YUYV;
-}
-template <>
-const __u32 V4LUtils::translatePixelFormat<MJPEG>()
-{
-    return V4L2_PIX_FMT_MJPEG;
-}
-
-enum V4LDeviceStatus
-{
+    V4L_NO_ERROR,
     VIDIOC_DQBUF_ERROR,
     VIDIOC_QBUF_ERROR,
     VIDIOC_STREAMON_ERROR,
@@ -92,15 +58,38 @@ enum V4LDeviceStatus
     NO_V4L_CAPTURE_DEVICE_ERROR,
     NO_DEVICE_ERROR,
     NO_RESOURCE_ERROR,
-    BANDWIDTH_ERROR,
-    V4L_OPEN_DEVICE_ERROR,
-    VIDIOC_STREAMOFF_ERROR,
-    V4L_CLOSE_DEVICE_ERROR,
-    V4L_DEVICE_INITIALIZING,
-    V4L_DEVICE_DISCONNECTED,
-    V4L_DEVICE_CONFIGURED,
-    V4L_DEVICE_GRABBING
+    CONFIG_IMG_TO_CAPTURE_ERROR,
+    VIDIOC_STREAMOFF_ERROR
 };
+
+struct V4LUtils
+{
+    template <typename T>
+    static const __u32 translatePixelFormat();
+
+    static int xioctl(int fh, unsigned long int request, void *arg)
+    {
+        int r;
+        do
+        {
+            r = ioctl(fh, request, arg);
+        }
+        while (-1 == r && EINTR == errno);
+
+        return r;
+    }
+};
+
+template <>
+const __u32 V4LUtils::translatePixelFormat<YUYV422_PACKED>()
+{
+    return V4L2_PIX_FMT_YUYV;
+}
+template <>
+const __u32 V4LUtils::translatePixelFormat<MJPEG>()
+{
+    return V4L2_PIX_FMT_MJPEG;
+}
 
 template <typename CodecOrFormat, unsigned int width, unsigned int height>
 class V4L2Grabber : public EventsProducer
@@ -111,13 +100,16 @@ public:
     V4L2Grabber(SharedEventsCatcher eventsCatcher, const std::string& devName, unsigned int fps = 0):
         EventsProducer::EventsProducer(eventsCatcher),
         mFps(fps),
-        mStatus(V4L_DEVICE_INITIALIZING),
+        mV4LError(V4L_NO_ERROR),
+        mStatus(DEV_INITIALIZING),
+        mErrno(0),
         mUnrecoverableState(false),
         mLatency(0),
         mGrabbingStartTime(0),
         mDevName(devName),
         mFd(-1),
-        mNewVideoFrameAvailable(false)
+        mNewVideoFrameAvailable(false),
+        mStreamOn(false)
     {
         mEncodedFramesBuffer.resize(10);
         unsigned int i;
@@ -281,7 +273,7 @@ public:
     FFMPEGAudioVideoMuxer<Container,
                           CodecOrFormat, width, height,
                           AudioCodec, audioSampleRate, audioChannels>&
-    operator >> 
+    operator >>
     (FFMPEGAudioVideoMuxer<Container,
                            CodecOrFormat, width, height,
                            AudioCodec, audioSampleRate, audioChannels>& audioVideoMuxer)
@@ -344,10 +336,89 @@ public:
         }
     }
 
-    enum V4LDeviceStatus status() const
+    enum V4LDeviceError getV4LError() const
+    {
+        return mV4LError;
+    }
+
+    int getErrno() const
+    {
+        return mErrno;
+    }
+
+    std::string getV4LErrorString() const
+    {
+        std::string ret = "";
+        switch(mV4LError)
+        {
+        case V4L_NO_ERROR:
+            ret = "V4L_NO_ERROR";
+            break;
+        case VIDIOC_DQBUF_ERROR:
+            ret = "VIDIOC_DQBUF_ERROR";
+            break;
+        case VIDIOC_QBUF_ERROR:
+            ret = "VIDIOC_QBUF_ERROR";
+            break;
+        case VIDIOC_STREAMON_ERROR:
+            ret = "VIDIOC_STREAMON_ERROR";
+            break;
+        case VIDIOC_REQBUFS_ERROR:
+            ret = "VIDIOC_REQBUFS_ERROR";
+            break;
+        case INSUFFICIENT_BUFFER_MEMORY_ERROR:
+            ret = "INSUFFICIENT_BUFFER_MEMORY_ERROR";
+            break;
+        case VIDIOC_QUERYBUF_ERROR:
+            ret = "VIDIOC_QUERYBUF_ERROR";
+            break;
+        case MMAP_ERROR:
+            ret = "MMAP_ERROR";
+            break;
+        case V4L_MMAP_UNSUPPORTED_ERROR:
+            ret = "V4L_MMAP_UNSUPPORTED_ERROR";
+            break;
+        case VIDIOC_S_FMT_ERROR:
+            ret = "VIDIOC_S_FMT_ERROR";
+            break;
+        case VIDIOC_S_PARM_ERROR:
+            ret = "VIDIOC_S_PARM_ERROR";
+            break;
+        case NO_V4L_DEVICE_ERROR:
+            ret = "NO_V4L_DEVICE_ERROR";
+            break;
+        case VIDIOC_QUERYCAP_ERROR:
+            ret = "VIDIOC_QUERYCAP_ERROR";
+            break;
+        case NO_V4L_CAPTURE_DEVICE_ERROR:
+            ret = "NO_V4L_CAPTURE_DEVICE_ERROR";
+            break;
+        case NO_DEVICE_ERROR:
+            ret = "NO_DEVICE_ERROR";
+            break;
+        case NO_RESOURCE_ERROR:
+            ret = "NO_RESOURCE_ERROR";
+            break;
+        case CONFIG_IMG_TO_CAPTURE_ERROR:
+            ret = "CONFIG_IMG_TO_CAPTURE_ERROR";
+            break;
+        case VIDIOC_STREAMOFF_ERROR:
+            ret = "VIDIOC_STREAMOFF_ERROR";
+            break;
+        }
+        return ret;
+    }
+
+    enum DeviceStatus status() const
     {
         return mStatus;
     }
+
+    bool isInUnrecoverableState() const
+    {
+        return mUnrecoverableState;
+    }
+
 
 private:
 
@@ -385,14 +456,15 @@ private:
                 // Could ignore EIO, see spec
                 // fall through
                 default:
-                    V4LUtils::printError("VIDIOC_DQBUF");
-                    mStatus = V4L_DEVICE_DISCONNECTED;
+                    mStatus = DEV_DISCONNECTED;
+                    mV4LError = VIDIOC_DQBUF_ERROR;
+                    mErrno = errno;
                     stopCapture();
                     closeDeviceAndReleaseMmap();
                     return;
             }
         }
-        
+
         if (mLatency == 0)
         {
             mLatency = av_gettime_relative() - mGrabbingStartTime;
@@ -404,19 +476,21 @@ private:
             mLatency = (monotimeNow.tv_sec * 1000000000 + monotimeNow.tv_nsec) -
             (buf.timestamp.tv_sec * 1000000000 + buf.timestamp.tv_usec * 1000);
         }
-        
-        mStatus = V4L_DEVICE_GRABBING;
 
-        memcpy(mEncodedFramesBuffer[mEncodedFramesBufferOffset], 
+        mV4LError = V4L_NO_ERROR;
+        mErrno = 0;
+        mStatus = DEV_CAN_GRAB;
+
+        memcpy(mEncodedFramesBuffer[mEncodedFramesBufferOffset],
                mBuffersFormVideoFrame[buf.index].get(), buf.bytesused);
-        
-        auto freeNothing = [](unsigned char* buffer){};        
-        ShareableVideoFrameData shData = 
+
+        auto freeNothing = [](unsigned char* buffer){};
+        ShareableVideoFrameData shData =
         ShareableAudioFrameData(mEncodedFramesBuffer[mEncodedFramesBufferOffset], freeNothing);
-        
-        mEncodedFramesBufferOffset = 
+
+        mEncodedFramesBufferOffset =
         (mEncodedFramesBufferOffset + 1) % mEncodedFramesBuffer.size();
-        
+
         videoFrame.assignDataSharedPtr(shData);
         videoFrame.setSize(buf.bytesused);
         if (!thereAreEventsPendingOn(mFd))
@@ -426,8 +500,8 @@ private:
 
         if (-1 == V4LUtils::xioctl(mFd, VIDIOC_QBUF, &buf))
         {
-            V4LUtils::printError("VIDIOC_QBUF");
-            mStatus = VIDIOC_QBUF_ERROR;
+            mV4LError = VIDIOC_QBUF_ERROR;
+            mErrno = errno;
             mUnrecoverableState = true;
             return;
         }
@@ -455,14 +529,15 @@ private:
             // Could ignore EIO, see spec
             // fall through
             default:
-                V4LUtils::printError("VIDIOC_DQBUF");
-                mStatus = V4L_DEVICE_DISCONNECTED;
+                mV4LError = VIDIOC_DQBUF_ERROR;
+                mErrno = errno;
+                mStatus = DEV_DISCONNECTED;
                 stopCapture();
                 closeDeviceAndReleaseMmap();
                 return;
             }
         }
-        
+
         if (mLatency == 0)
         {
             mLatency = av_gettime_relative() - mGrabbingStartTime;
@@ -475,8 +550,10 @@ private:
             mLatency = (monotimeNow.tv_sec * 1000000000 + monotimeNow.tv_nsec) -
             (buf.timestamp.tv_sec * 1000000000 + buf.timestamp.tv_usec * 1000);
         }
-        
-        mStatus = V4L_DEVICE_GRABBING;
+
+        mV4LError = V4L_NO_ERROR;
+        mErrno = 0;
+        mStatus = DEV_CAN_GRAB;
         videoFrame.assignDataSharedPtr(mBuffersFormVideoFrame[buf.index]);
         videoFrame.setSize(buf.bytesused);
         if (!thereAreEventsPendingOn(mFd))
@@ -486,8 +563,8 @@ private:
 
         if (-1 == V4LUtils::xioctl(mFd, VIDIOC_QBUF, &buf))
         {
-            V4LUtils::printError("VIDIOC_QBUF");
-            mStatus = VIDIOC_QBUF_ERROR;
+            mV4LError = VIDIOC_QBUF_ERROR;
+            mErrno = errno;
             mUnrecoverableState = true;
             return;
         }
@@ -512,20 +589,24 @@ private:
 
             if (-1 == V4LUtils::xioctl(mFd, VIDIOC_QBUF, &buf))
             {
-                V4LUtils::printError("VIDIOC_QBUF");
-                mStatus = VIDIOC_QBUF_ERROR;
+                mV4LError = VIDIOC_QBUF_ERROR;
+                mErrno = errno;
                 mUnrecoverableState = true;
                 return false;
             }
         }
         if (-1 == V4LUtils::xioctl(mFd, VIDIOC_STREAMON, &type))
         {
-            V4LUtils::printError("VIDIOC_STREAMON");
-            mStatus = VIDIOC_STREAMON_ERROR;
+            mV4LError = VIDIOC_STREAMON_ERROR;
+            mErrno = errno;
             mUnrecoverableState = true;
             return false;
         }
-        mStatus = V4L_DEVICE_GRABBING;
+
+        mStreamOn = true;
+        mV4LError = V4L_NO_ERROR;
+        mErrno = 0;
+        mStatus = DEV_CAN_GRAB;
         return true;
     }
 
@@ -541,14 +622,15 @@ private:
         {
             if (EINVAL == errno)
             {
-                mStatus = V4L_MMAP_UNSUPPORTED_ERROR;
+                mV4LError = V4L_MMAP_UNSUPPORTED_ERROR;
+                mErrno = errno;
                 mUnrecoverableState = true;
                 return false;
             }
             else
             {
-                V4LUtils::printError("VIDIOC_REQBUFS");
-                mStatus = VIDIOC_REQBUFS_ERROR;
+                mV4LError = VIDIOC_REQBUFS_ERROR;
+                mErrno = errno;
                 mUnrecoverableState = true;
                 return false;
             }
@@ -556,7 +638,8 @@ private:
 
         if (req.count < 2)
         {
-            mStatus = INSUFFICIENT_BUFFER_MEMORY_ERROR;
+            mV4LError = INSUFFICIENT_BUFFER_MEMORY_ERROR;
+            mErrno = errno;
             mUnrecoverableState = true;
             return false;
         }
@@ -573,8 +656,8 @@ private:
 
             if (-1 == V4LUtils::xioctl(mFd, VIDIOC_QUERYBUF, &buf))
             {
-                V4LUtils::printError("VIDIOC_QUERYBUF");
-                mStatus = VIDIOC_QUERYBUF_ERROR;
+                mV4LError = VIDIOC_QUERYBUF_ERROR;
+                mErrno = errno;
                 mUnrecoverableState = true;
                 return false;
             }
@@ -588,11 +671,12 @@ private:
 
             if (MAP_FAILED == mBuffers[mNumOfBuffers].start)
             {
-                V4LUtils::printError("mmap");
-                mStatus = MMAP_ERROR;
+                mV4LError = MMAP_ERROR;
+                mErrno = errno;
                 mUnrecoverableState = true;
                 return false;
             }
+
             unsigned char* videoFrameDataPtr = (unsigned char* )mBuffers[mNumOfBuffers].start;
             int mmapLength = buf.length;
             auto releaseMmap = [mmapLength] (unsigned char* videoFrameDataPtr_)
@@ -616,8 +700,8 @@ private:
 
         if (-1 == V4LUtils::xioctl(mFd, VIDIOC_S_FMT, &fmt))
         {
-            V4LUtils::printError("VIDIOC_S_FMT");
-            mStatus = VIDIOC_S_FMT_ERROR;
+            mV4LError = VIDIOC_S_FMT_ERROR;
+            mErrno = errno;
             mUnrecoverableState = true;
             return false;
         }
@@ -626,15 +710,16 @@ private:
         fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
         if (-1 == V4LUtils::xioctl(mFd, VIDIOC_G_FMT, &fmt))
         {
-            V4LUtils::printError("VIDIOC_G_FMT");
-            mStatus = VIDIOC_S_FMT_ERROR;
+            mV4LError = VIDIOC_S_FMT_ERROR;
+            mErrno = errno;
             mUnrecoverableState = true;
             return false;
         }
 
         if (fmt.fmt.pix.width != width || fmt.fmt.pix.height != height)
         {
-            mStatus = BANDWIDTH_ERROR;
+            mV4LError = CONFIG_IMG_TO_CAPTURE_ERROR;
+            mErrno = 0;
             closeDeviceAndReleaseMmap();
             return false;
         }
@@ -648,8 +733,8 @@ private:
             param.parm.capture.timeperframe.denominator = mFps;
             if (-1 == V4LUtils::xioctl(mFd, VIDIOC_S_PARM, &param))
             {
-                V4LUtils::printError("VIDIOC_S_PARM");
-                mStatus = VIDIOC_S_PARM_ERROR;
+                mV4LError = VIDIOC_S_PARM_ERROR;
+                mErrno = errno;
                 mUnrecoverableState = true;
                 return false;
             }
@@ -668,13 +753,14 @@ private:
             if (EINVAL == errno)
             {
                 mUnrecoverableState = true;
-                mStatus = NO_V4L_DEVICE_ERROR;
+                mV4LError = NO_V4L_DEVICE_ERROR;
+                mErrno = errno;
                 return false;
             }
             else
             {
-                V4LUtils::printError("VIDIOC_QUERYCAP");
-                mStatus = VIDIOC_QUERYCAP_ERROR;
+                mV4LError = VIDIOC_QUERYCAP_ERROR;
+                mErrno = errno;
                 mUnrecoverableState = true;
                 return false;
             }
@@ -682,7 +768,8 @@ private:
 
         if (!(cap.capabilities & V4L2_CAP_VIDEO_CAPTURE))
         {
-            mStatus = NO_V4L_CAPTURE_DEVICE_ERROR;
+            mV4LError = NO_V4L_CAPTURE_DEVICE_ERROR;
+            mErrno = errno;
             mUnrecoverableState = true;
             return false;
         }
@@ -712,7 +799,7 @@ private:
         {
             // Errors ignored.
         }
-        mStatus = V4L_DEVICE_CONFIGURED;
+        mStatus = DEV_CONFIGURED;
         return true;
     }
 
@@ -722,13 +809,15 @@ private:
 
         if (-1 == stat(mDevName.c_str(), &st))
         {
-            mStatus = NO_RESOURCE_ERROR;
+            mV4LError = NO_RESOURCE_ERROR;
+            mErrno = errno;
             return false;
         }
 
         if (!S_ISCHR(st.st_mode))
         {
-            mStatus = NO_DEVICE_ERROR;
+            mV4LError = NO_DEVICE_ERROR;
+            mErrno = errno;
             mUnrecoverableState = true;
             return false;
         }
@@ -738,9 +827,12 @@ private:
 
         if (-1 == mFd)
         {
-            mStatus = V4L_OPEN_DEVICE_ERROR;
+            mStatus = OPEN_DEV_ERROR;
+            mErrno = errno;
             return false;
         }
+        mV4LError = V4L_NO_ERROR;
+        mErrno = 0;
         return true;
     }
 
@@ -750,11 +842,15 @@ private:
             return;
         enum v4l2_buf_type type;
         type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-        if (-1 == V4LUtils::xioctl(mFd, VIDIOC_STREAMOFF, &type))
+        if(mStreamOn)
         {
-            mStatus = VIDIOC_STREAMOFF_ERROR;
-            V4LUtils::printError("VIDIOC_STREAMOFF");
+            if (-1 == V4LUtils::xioctl(mFd, VIDIOC_STREAMOFF, &type))
+            {
+                mV4LError = VIDIOC_STREAMOFF_ERROR;
+                mErrno = errno;
+            }
         }
+        mStreamOn = false;
     }
 
     void closeDeviceAndReleaseMmap()
@@ -763,8 +859,8 @@ private:
             return;
         if (-1 == close(mFd))
         {
-            mStatus = V4L_CLOSE_DEVICE_ERROR;
-            V4LUtils::printError("close");
+            mStatus = CLOSE_DEV_ERROR;
+            mErrno = errno;
         }
         mFd = -1;
         while (mBuffersFormVideoFrame.size() > 0)
@@ -785,7 +881,9 @@ private:
     };
 
     unsigned int mFps;
-    enum V4LDeviceStatus mStatus;
+    enum V4LDeviceError mV4LError;
+    enum DeviceStatus mStatus;
+    int mErrno;
     bool mUnrecoverableState;
     int64_t mLatency;
     int64_t mGrabbingStartTime;
@@ -798,6 +896,7 @@ private:
     VideoFrame<CodecOrFormat, width, height> mGrabbedVideoFrame;
     std::vector<unsigned char* > mEncodedFramesBuffer;
     unsigned int mEncodedFramesBufferOffset;
+    bool mStreamOn;
 
 };
 

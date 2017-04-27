@@ -1,4 +1,4 @@
-/* 
+/*
  * Created (25/04/2017) by Paolo-Pr.
  * For conditions of distribution and use, see the accompanying LICENSE file.
  *
@@ -17,16 +17,35 @@ template <typename Container>
 class HTTPStreamer  : public EventsProducer
 {
 
+public:
+
+    enum MediaStatus status() const
+    {
+        return mStatus;
+    }
+
+    int getErrno() const
+    {
+        return mErrno;
+    }
+
 protected:
 
     HTTPStreamer(SharedEventsCatcher eventsCatcher, std::string address, unsigned int port):
         EventsProducer::EventsProducer(eventsCatcher),
         mAddress(address),
-        mPort(port)
+        mPort(port),
+        mStatus(MEDIA_NOT_READY),
+        mErrno(0)
     {
         std::string location = "/stream." + containerExtension<Container>();
-        makeHTTPServerPollable(mAddress, location, mPort);
+        if (!makeHTTPServerPollable(mAddress, location, mPort))
+        {
+            mErrno = errno;
+            return;
+        }
         observeHTTPEventsOn(mAddress, mPort);
+        mStatus = MEDIA_READY;
     }
 
     ~HTTPStreamer()
@@ -43,9 +62,11 @@ protected:
     std::map<struct evhttp_request*, bool> mWrittenHeaderFlagAndRequests;
     std::string mAddress;
     unsigned int mPort;
+    enum MediaStatus mStatus;
 
 private:
 
+    int mErrno;
     template <typename Container_>
     std::string containerExtension();
 

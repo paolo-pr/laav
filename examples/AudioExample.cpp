@@ -13,12 +13,12 @@
  * 
  * The streams' addresses are:
  *
- *   (MPEGTS - AAC) 
- *   http://127.0.0.1:8081/stream.ts
- *
  *   (MATROSKA - MP2)
  *   http://127.0.0.1:8080/stream.mkv 
  * 
+ *   (MPEGTS - AAC) 
+ *   http://127.0.0.1:8081/stream.ts
+ *
  * Tested with VLC and ffplay players.
  * 
  */

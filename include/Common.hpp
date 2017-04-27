@@ -1,4 +1,4 @@
-/* 
+/*
  * Created (25/04/2017) by Paolo-Pr.
  * For conditions of distribution and use, see the accompanying LICENSE file.
  *
@@ -64,6 +64,17 @@ private:
 
     enum MediaStatus mCause;
 
+};
+
+enum DeviceStatus
+{
+    OPEN_DEV_ERROR,
+    CONFIGURE_DEV_ERROR,
+    CLOSE_DEV_ERROR,
+    DEV_INITIALIZING,
+    DEV_CONFIGURED,
+    DEV_CAN_GRAB,
+    DEV_DISCONNECTED
 };
 
 class OutOfBounds

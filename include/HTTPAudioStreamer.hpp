@@ -1,4 +1,4 @@
-/* 
+/*
  * Created (25/04/2017) by Paolo-Pr.
  * For conditions of distribution and use, see the accompanying LICENSE file.
  *
@@ -31,14 +31,15 @@ public:
     void takeStreamableFrame(const AudioFrame<AudioCodecOrFormat,
                                               audioSampleRate, audioChannels>& audioFrameToStream)
     {
-        mAudioMuxer.takeMuxableFrame(audioFrameToStream);
+        if (this->mStatus == MEDIA_READY)
+            mAudioMuxer.takeMuxableFrame(audioFrameToStream);
     }
 
     // Todo extract common code and move it to
     // base class (do the same for video and audiovideo streamers)
     void sendMuxedData()
     {
-        if (this->mClientConnectionsAndRequests.size() != 0)
+        if (this->mClientConnectionsAndRequests.size() != 0 && this->mStatus == MEDIA_READY)
         {
             try
             {

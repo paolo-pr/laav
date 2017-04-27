@@ -1,4 +1,4 @@
-/* 
+/*
  * Created (25/04/2017) by Paolo-Pr.
  * For conditions of distribution and use, see the accompanying LICENSE file.
  *
@@ -19,12 +19,20 @@ public:
 
     HTTPCommandsReceiver(SharedEventsCatcher eventsCatcher, std::string address, unsigned int port):
         EventsProducer::EventsProducer(eventsCatcher),
+        mStatus(MEDIA_NOT_READY),
+        mErrno(0),        
         mAddress(address),
         mPort(port)
     {
         std::string location = "/commands";
-        makeHTTPServerPollable(mAddress, location, mPort);
+        if (!makeHTTPServerPollable(mAddress, location, mPort))
+        {
+            mErrno = errno;
+            return;
+        }
+
         observeHTTPEventsOn(mAddress, mPort);
+        mStatus = MEDIA_READY;
     }
 
     std::map<std::string, std::string>& receivedCommands()
@@ -35,6 +43,16 @@ public:
     void clearCommands()
     {
         mCommands.clear();
+    }
+
+    enum MediaStatus status() const
+    {
+        return mStatus;
+    }
+
+    int getErrno() const
+    {
+        return mErrno;
     }
 
 private:
@@ -68,6 +86,8 @@ private:
         evbuffer_free(buf);
     }
 
+    enum MediaStatus mStatus;
+    int mErrno;
     std::map<std::string, std::string> mCommands;
     std::map<struct evhttp_connection*, struct evhttp_request*> mClientConnectionsAndRequests;
     std::string mAddress;
