@@ -52,11 +52,11 @@ doxygen Doxyfile
 The library has been tested with the **[VLC](http://www.videolan.org/)** and **[FFPLAY](https://ffmpeg.org/)** media players, but other players should work as well.
 In order to reduce the network streams' latency, use the following flags on the client side:
 
-VLC (tested with v2.2.4: set a low value for --network-caching flags)
+VLC (tested with v2.2.4: set a low value for --network-caching flags):
 ```
 vlc --network-caching 200 http://stream_url
 ```
-FFPLAY
+FFPLAY:
 ```
 ffplay -fflags nobuffer http://stream_url
 ```
