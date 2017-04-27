@@ -11,12 +11,11 @@
 
 #include <iostream>
 #include <fstream>
+#include <vector>
 #include "AllVideoCodecsAndFormats.hpp"
 #include "Common.hpp"
 #include "EventsManager.hpp"
 #include "VideoFrameHolder.hpp"
-
-#include <vector>
 
 extern "C"
 {
