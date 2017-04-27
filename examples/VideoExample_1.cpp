@@ -31,7 +31,7 @@ int main(int argc, char** argv)
     V4L2Grabber <YUYV422_PACKED, WIDTH, HEIGHT>
     vGrab(eventsCatcher, argv[1]);
 
-    // Needed for the H264 encoder (it accepts only PLANAR fmts)
+    // Needed for the H264 encoder (it accepts only PLANAR formats)
     FFMPEGVideoConverter <YUYV422_PACKED, WIDTH, HEIGHT, YUV420_PLANAR, WIDTH, HEIGHT>
     vConv;
 
