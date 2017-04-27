@@ -34,8 +34,6 @@
  *
  *   (MATROSKA - MJPEG - ADTS_AAC)
  *   http://127.0.0.1:8085/stream.mkv
- *
- * Tested with VLC and ffplay players.
  * 
  */
 
