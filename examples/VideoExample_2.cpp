@@ -26,8 +26,6 @@
  *   (exit the main loop)
  *   curl --data "stop=yes" http://127.0.0.1:8081/commands
  * 
- * Tested with cURL, VLC and ffplay players.
- * 
  */
 
 #include "V4L2Grabber.hpp"
