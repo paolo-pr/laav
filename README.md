@@ -13,7 +13,6 @@ A header-only **C++** library for capturing audio and video from multiple live s
 The library is useful for building **video surveillance** systems as well, consisting in media servers which stream and record at the same time and which can be controlled through HTTP commands (see **[THIS](https://github.com/paolo-pr/laav/blob/master/examples/VideoExample_2.cpp)** example).
 
 The library currently runs on **Linux** (ALSA and V4L2 devices), but a Windows port is planned (any contribution is welcome!);
-it has been tested with the **[VLC](http://www.videolan.org/)** and **[FFPLAY](https://ffmpeg.org/)** media players.
 
 ## FEATURES
 
@@ -49,6 +48,17 @@ g++ -Wall -std=c++11 -DLINUX -o YourProgram YourProgram.cpp `pkg-config --libs l
 * API documentation in HTML format can be created by executing, inside the doxy directory:
 ```
 doxygen Doxyfile
+```
+The library has been tested with the **[VLC](http://www.videolan.org/)** and **[FFPLAY](https://ffmpeg.org/)** media players, but other players should work as well.
+In order to reduce the network streams' latency, use the following flags on the client side:
+
+VLC (tested with v2.2.4: set a low value for --network-caching flags)
+```
+vlc --network-caching 200 http://stream_url
+```
+FFPLAY
+```
+ffplay -fflags nobuffer http://stream_url
 ```
 
 ## HOW TO USE IT
