@@ -108,6 +108,7 @@ public:
         mDevName(devName),
         mFd(-1),
         mNewVideoFrameAvailable(false),
+        mEncodedFramesBufferOffset(0),        
         mStreamOn(false)
     {
         mEncodedFramesBuffer.resize(10);
