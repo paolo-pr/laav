@@ -418,7 +418,6 @@ public:
         return mUnrecoverableState;
     }
 
-
 private:
 
     /*
