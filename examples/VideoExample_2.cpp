@@ -83,7 +83,7 @@ int main(int argc, char** argv)
     while (1)
     {
         // Decode and execute HTTP commands
-        std::map <std::string, std::string>& cmds = commandsReceiver.receivedCommands();
+        std::map<std::string, std::string>& cmds = commandsReceiver.receivedCommands();
         if (cmds.size() != 0)
         {
             if (cmds.find("stop") != cmds.end())
