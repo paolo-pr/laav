@@ -104,12 +104,12 @@ int main(int argc, char** argv)
         /*
          * ERROR HANDLING
          */
-        if (avStream_1.status() != MEDIA_READY)
+        if (avStream_2.status() != MEDIA_READY)
         {
             if(showAudioVideoStreamError)
             {
                 std::cerr << "STREAM error: "
-                << strerror(avStream_1.getErrno()) << std::endl;
+                << strerror(avStream_2.getErrno()) << std::endl;
                 std::cerr << "The error can't be recovered"  << std::endl;
                 showAudioVideoStreamError = false;
             }
