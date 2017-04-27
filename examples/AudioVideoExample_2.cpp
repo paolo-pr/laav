@@ -31,8 +31,6 @@
  * All the errors of a device grabber and HTTP nodes are pollable (they can be checked with
  * grabber.getErrno() and grabber.status() functions)
  *
- * Tested with VLC and ffplay players.
- *
  */
 
 #include "AlsaGrabber.hpp"
