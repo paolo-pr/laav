@@ -32,7 +32,7 @@ while (1)
 
 * **Threads are not used at all** and they are intentionally discouraged in order to avoid that they can be improperly used for decoupling tasks, without taking advantage from multi-core systems.
 * All the audio/video modules (-> classes) make **extensive use of templates** and all their possible concatenations are checked at **compile-time**, so to avoid inconsistent pipes.
-* All the pipes are **safe at runtime**. I.E: when a source is disconnected or temporarily unavailable, the main loop can continue without necessarily having to check errors (they can be checked, anyway, by polling the status of each node)
+* All the pipes are **safe at runtime**. I.E: when a source is disconnected or temporarily unavailable, the main loop can continue without necessarily having to check errors (they can be checked, anyway, by polling the status of each node: see [this example](https://github.com/paolo-pr/laav/blob/master/examples/AudioVideoExample_2.cpp))
 * The library is all RAII-designed (basically it safely wraps Libav, V4L and ALSA) and **the user doesn't have to bother with pointers and memory management**.
 * The public API is intended to be intuitive, with few self-explanatory functions.
 
@@ -57,7 +57,6 @@ See the provided **[EXAMPLES](https://github.com/paolo-pr/laav/tree/master/examp
 
 ## TODO
 
-* Error/exception handling must be less generic and will be improved ASAP (according to my spare time, which is never enough...). A doc/example about how to manage errors will be added as well.
 * Improve the compile-time error messages, for inconsistent pipes, with more static_assert(...) calls.
 * Add a RTSP/RTP streaming server.
 * Windows port (basically, it will consist in creating Windows based classes corresponding to the ALSAGrabber and V4L2Grabber classes, with the same API, and few other things: any contribution is welcome!).
