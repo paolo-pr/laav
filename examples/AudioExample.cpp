@@ -19,8 +19,6 @@
  *   (MPEGTS - AAC) 
  *   http://127.0.0.1:8081/stream.ts
  *
- * Tested with VLC and ffplay players.
- * 
  */
 
 #include "AlsaGrabber.hpp"
