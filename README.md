@@ -22,7 +22,7 @@ The library currently runs on **Linux** (ALSA and V4L2 devices), but a Windows p
 while (1)
 {
     // Pipe
-    videoGrabber >> videoConverter >> videoEncoder >> videoStreamer;
+    grabber >> converter >> encoder >> streamer;
     
     // Audio-video events catcher
     eventsCatcher->catchNextEvent();
