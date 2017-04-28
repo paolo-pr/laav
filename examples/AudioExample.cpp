@@ -45,7 +45,7 @@ int main(int argc, char** argv)
     AlsaGrabber <S16_LE, SAMPLE_RATE, MONO>
     aGrab(eventsCatcher, argv[1]);
     
-    // Splits the main pipe into two sub-pipes
+    // Split the main pipe into two sub-pipes
     AudioFrameHolder <S16_LE, SAMPLE_RATE, MONO>
     aFh;    
 
