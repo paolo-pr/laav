@@ -147,6 +147,7 @@ protected:
             libEventHTTPConnectionCallBack, this) != 0)
             printAndThrowUnrecoverableError
             ("evhttp_set_cb(...)");
+        
         mObservedHTTPEventContainers[port] = httpEventContainer;
 
         return true;
