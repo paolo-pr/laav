@@ -139,7 +139,10 @@ protected:
     {
         struct evhttp* httpEventContainer = evhttp_new(mEventsCatcher.get()->libeventEventBase());
         if (evhttp_bind_socket(httpEventContainer, address.c_str(), port) != 0)
+        {
+            evhttp_free(httpEventContainer);
             return false;
+        }
         if (evhttp_set_cb(httpEventContainer, location.c_str(),
             libEventHTTPConnectionCallBack, this) != 0)
             printAndThrowUnrecoverableError
