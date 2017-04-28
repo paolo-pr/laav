@@ -64,7 +64,7 @@ enum V4LDeviceError
 struct V4LUtils
 {
     template <typename T>
-    static const __u32 translatePixelFormat();
+    static __u32 translatePixelFormat();
 
     static int xioctl(int fh, unsigned long int request, void *arg)
     {
@@ -80,12 +80,12 @@ struct V4LUtils
 };
 
 template <>
-const __u32 V4LUtils::translatePixelFormat<YUYV422_PACKED>()
+__u32 V4LUtils::translatePixelFormat<YUYV422_PACKED>()
 {
     return V4L2_PIX_FMT_YUYV;
 }
 template <>
-const __u32 V4LUtils::translatePixelFormat<MJPEG>()
+__u32 V4LUtils::translatePixelFormat<MJPEG>()
 {
     return V4L2_PIX_FMT_MJPEG;
 }
