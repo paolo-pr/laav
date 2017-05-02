@@ -106,7 +106,7 @@ int main(int argc, char** argv)
          */
         if (avStream_2.status() != MEDIA_READY)
         {
-            if(showAudioVideoStreamError)
+            if (showAudioVideoStreamError)
             {
                 std::cerr << "STREAM error: "
                 << strerror(avStream_2.getErrno()) << std::endl;
@@ -117,7 +117,7 @@ int main(int argc, char** argv)
 
         if (vGrab.status() != DEV_CAN_GRAB)
         {
-            if(showVideoGrabError)
+            if (showVideoGrabError)
             {
                 std::cerr << "VIDEO error: " << vGrab.getV4LErrorString()
                 << " (" << strerror(vGrab.getErrno()) << ")" << std::endl;
