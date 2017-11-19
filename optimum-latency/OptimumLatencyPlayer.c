@@ -148,20 +148,20 @@ main(int argc, char *argv[])
     data.sink_pipeline = gst_parse_launch 
     //("souphttpsrc location=http://127.0.0.1:8082/stream.ts name=udpsrc 
     //! appsink name=udpsink emit-signals=true sync=false", 
-   ("udpsrc port=8082 name=udpsrc ! appsink name=udpsink emit-signals=true sync=false", 
-    &error);
+    ("udpsrc port=8082 name=udpsrc ! appsink name=udpsink emit-signals=true sync=false", 
+     &error);
 
     data.audio_source_pipeline = gst_parse_launch 
-   ("appsrc name=udpaudiosource ! tsdemux name=audiodemuxer ! aacparse name=audioparser "
-    "! avdec_aac name=audiodecoder ! pulsesink sync=false async=false buffer-time=100 "
-    "latency-time=100 name=audiosink ", 
-    &error);
+    ("appsrc name=udpaudiosource ! tsdemux name=audiodemuxer ! aacparse name=audioparser "
+     "! avdec_aac name=audiodecoder ! pulsesink sync=false async=false buffer-time=100 "
+     "latency-time=100 name=audiosink ", 
+     &error);
 
     data.video_source_pipeline = gst_parse_launch 
-   ("appsrc name=udpvideosource ! tsdemux name=videodemuxer ! h264parse name=videoparser "
-    "! avdec_h264 name=videodecoder max-threads=1 "
-    "! xvimagesink sync=false async=false max-lateness=20000",
-    &error);  
+    ("appsrc name=udpvideosource ! tsdemux name=videodemuxer ! h264parse name=videoparser "
+     "! avdec_h264 name=videodecoder max-threads=1 "
+     "! xvimagesink sync=false async=false max-lateness=20000",
+     &error);  
 
     if (!data.sink_pipeline) 
     {
