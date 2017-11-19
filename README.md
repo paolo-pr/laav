@@ -7,12 +7,14 @@ A header-only **C++** library for capturing audio and video from multiple live s
 * encoding (video: **H264**, audio: **AAC**, **MP2**)
 * decoding (video: **MJPEG**) / transcoding (video: **MJPEG** -> **H264**)
 * recording to file (**MPEGTS** and **MATROSKA** containers, audio and/or video)
-* streaming (**HTTP** protocol for **MPEGTS** and **MATROSKA** containers)
+* streaming (**HTTP** and **UDP** protocols for **MPEGTS** and **MATROSKA** containers)
 * image processing
 
-The library is useful for building **video surveillance** systems as well, consisting in media servers which stream and record at the same time and which can be controlled through HTTP commands (see **[THIS](https://github.com/paolo-pr/laav/blob/master/examples/VideoExample_2.cpp)** example).
+The project is useful for building **video surveillance** systems as well, consisting in media servers which stream and record at the same time and which can be controlled through HTTP commands (see **[THIS](https://github.com/paolo-pr/laav/blob/master/examples/VideoExample_2.cpp)** example).
 
-The library currently runs on **Linux** (ALSA and V4L2 devices), but a Windows port is planned (any contribution is welcome!).
+It also provides an **[experimental UDP audio (AAC) + video (H264) streaming system](https://github.com/paolo-pr/laav/blob/master/optimum-latency/README.md)** (streaming server + client player) with the **lowest possible latency**, based on the library and a patched version of Gstreamer.
+
+The project runs on **Linux** (ALSA and V4L2 devices), but a Windows port is planned (any contribution is welcome!).
 
 ## FEATURES
 
@@ -71,4 +73,3 @@ See the provided **[EXAMPLES](https://github.com/paolo-pr/laav/tree/master/examp
 * Add a RTSP/RTP streaming server.
 * Windows port (basically, it will consist in creating Windows based classes corresponding to the ALSAGrabber and V4L2Grabber classes, with the same API, and few other things: any contribution is welcome!).
 * MPEGTS-MJPEG is currently NOT supported.
-* Add a demuxer/player (any contribution is welcome!).

@@ -36,7 +36,7 @@ int main(int argc, char** argv)
     vConv;
 
     FFMPEGH264Encoder <YUV420_PLANAR, WIDTH, HEIGHT>
-    vEnc(DEFAULT_BITRATE, 5, H264_ULTRAFAST, H264_DEFAULT_PROFILE);
+    vEnc(DEFAULT_BITRATE, 5, H264_ULTRAFAST, H264_DEFAULT_PROFILE, H264_DEFAULT_TUNE);
 
     HTTPVideoStreamer <MPEGTS, H264, WIDTH, HEIGHT>
     vStream(eventsCatcher, "127.0.0.1", 8080);

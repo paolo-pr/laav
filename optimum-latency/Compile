@@ -1,0 +1,5 @@
+#!/bin/bash
+cd $(dirname $0)
+
+g++ -Wall -std=c++11 -g -DLINUX -DPAT_PMT_AT_FRAMES -DTCP_NODELAY -o OptimumLatencyStreamer OptimumLatencyStreamer.cpp -I ../include `pkg-config --libs libavformat libavcodec libavutil libswresample libswscale libevent alsa`
+gcc -o OptimumLatencyPlayer OptimumLatencyPlayer.c `pkg-config --cflags --libs gstreamer-1.0 x11 gstreamer-video-1.0 gstreamer-app-1.0`
