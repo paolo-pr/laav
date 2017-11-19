@@ -214,7 +214,6 @@ main(int argc, char *argv[])
                        (GstPadProbeCallback) cb_have_data, &data_source_3, NULL);
     gst_object_unref(pad);
 
-    /*
     const char *data_source_4 = "VIDEO DEMUXER";
     pad = gst_element_get_static_pad(data.video_parser, "sink");  
     gst_pad_add_probe(pad, GST_PAD_PROBE_TYPE_BUFFER,
@@ -232,7 +231,7 @@ main(int argc, char *argv[])
     gst_pad_add_probe(pad, GST_PAD_PROBE_TYPE_BUFFER,
                        (GstPadProbeCallback) cb_have_data, &data_source_6, NULL);
     gst_object_unref(pad);  
-    */  
+
     gst_element_set_state(data.sink_pipeline, GST_STATE_PLAYING);
     gst_element_set_state(data.audio_source_pipeline, GST_STATE_PLAYING);
     gst_element_set_state(data.video_source_pipeline, GST_STATE_PLAYING);  
