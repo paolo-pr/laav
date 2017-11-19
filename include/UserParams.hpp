@@ -43,6 +43,19 @@ enum H264Profiles
     H264_CAVLC_444
 };
 
+enum H264Tunes
+{
+    H264_DEFAULT_TUNE,
+    H264_FILM,
+    H264_ANIMATION,
+    H264_GRAIN,
+    H264_STILLIMAGE,
+    H264_FASTDECODE,
+    H264_ZEROLATENCY,
+    H264_PSNR,
+    H264_SSIM
+};
+
 enum H264Presets
 {
     H264_DEFAULT_PRESET,

@@ -21,6 +21,10 @@ extern "C"
 #include <assert.h>
 #ifdef LINUX
 #include "unistd.h"
+    #ifdef TCP_NODELAY
+    #include <netinet/in.h>
+    #include <netinet/tcp.h>
+    #endif
 #endif
 }
 
@@ -138,11 +142,20 @@ protected:
     bool makeHTTPServerPollable(const std::string& address, const std::string& location, int port)
     {
         struct evhttp* httpEventContainer = evhttp_new(mEventsCatcher.get()->libeventEventBase());
-        if (evhttp_bind_socket(httpEventContainer, address.c_str(), port) != 0)
+        struct evhttp_bound_socket *sock;
+                   
+        if ((sock = evhttp_bind_socket_with_handle(httpEventContainer, address.c_str(), port)) == 0)
         {
             evhttp_free(httpEventContainer);
             return false;
         }
+        
+#ifdef TCP_NODELAY
+        int sock_fd = evhttp_bound_socket_get_fd(sock);        
+        int one = 1;      
+        setsockopt(sock_fd, SOL_TCP, TCP_NODELAY, &one, sizeof(one));        
+#endif
+        
         if (evhttp_set_cb(httpEventContainer, location.c_str(),
             libEventHTTPConnectionCallBack, this) != 0)
             printAndThrowUnrecoverableError

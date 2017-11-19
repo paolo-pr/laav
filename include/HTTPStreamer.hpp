@@ -8,49 +8,42 @@
 #define HTTPSTREAMER_HPP_INCLUDED
 
 #include "EventsManager.hpp"
-#include "FFMPEGAudioVideoMuxer.hpp"
+#include "Streamer.hpp"
 
 namespace laav
 {
 
 template <typename Container>
-class HTTPStreamer  : public EventsProducer
+class HTTPStreamer  : public Streamer<Container>, public EventsProducer
 {
 
 public:
 
-    enum MediaStatus status() const
+    bool isStreaming() const
     {
-        return mStatus;
+        return mIsStreaming;
     }
-
-    int getErrno() const
-    {
-        return mErrno;
-    }
-
+    
 protected:
 
     HTTPStreamer(SharedEventsCatcher eventsCatcher, std::string address, unsigned int port):
+        Streamer<Container>(address, port),
         EventsProducer::EventsProducer(eventsCatcher),
-        mAddress(address),
-        mPort(port),
-        mStatus(MEDIA_NOT_READY),
-        mErrno(0)
+        mIsStreaming(false)
     {
         std::string location = "/stream." + containerExtension<Container>();
-        if (!makeHTTPServerPollable(mAddress, location, mPort))
+        if (!makeHTTPServerPollable(this->mAddress, location, this->mPort))
         {
-            mErrno = errno;
+            this->mErrno = errno;
             return;
         }
-        observeHTTPEventsOn(mAddress, mPort);
-        mStatus = MEDIA_READY;
+        observeHTTPEventsOn(this->mAddress, this->mPort);
+        this->mStatus = MEDIA_READY;
     }
 
     ~HTTPStreamer()
     {
-        dontObserveHTTPEventsOn(mAddress, mPort);
+        dontObserveHTTPEventsOn(this->mAddress, this->mPort);
     }
 
     virtual void hTTPConnectionCallBack(struct evhttp_request* clientRequest,
@@ -60,13 +53,10 @@ protected:
 
     std::map<struct evhttp_connection*, struct evhttp_request*> mClientConnectionsAndRequests;
     std::map<struct evhttp_request*, bool> mWrittenHeaderFlagAndRequests;
-    std::string mAddress;
-    unsigned int mPort;
-    enum MediaStatus mStatus;
+    bool mIsStreaming;
 
 private:
 
-    int mErrno;
     template <typename Container_>
     std::string containerExtension();
 

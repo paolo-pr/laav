@@ -266,6 +266,41 @@ const char* convertToFFMPEGPreset(enum H264Presets preset)
     return ret;
 }
 
+const char* convertToFFMPEGTune(enum H264Tunes tune)
+{
+    const char* ret = "";
+    switch(tune)
+    {
+    case (H264_FILM):
+        ret = "film";
+        break;
+    case (H264_ANIMATION):
+        ret = "animation";
+        break;
+    case (H264_GRAIN):
+        ret = "grain";
+        break;
+    case (H264_STILLIMAGE):
+        ret = "stillimage";
+        break;
+    case (H264_FASTDECODE):
+        ret = "fastdecode";
+        break;
+    case (H264_ZEROLATENCY):
+        ret = "zerolatency";
+        break;
+    case (H264_PSNR):
+        ret = "psnr";
+        break;
+    case (H264_SSIM):
+        ret = "ssim";
+        break;        
+    default:
+        break;
+    }
+    return ret;
+}
+
 }
 
 #endif // FFMPEGCOMMON_HPP_INCLUDED

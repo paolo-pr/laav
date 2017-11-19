@@ -104,6 +104,19 @@ void ignoreSigpipe()
 }
 #endif
 
+void printCurrDate()
+{
+#ifdef LINUX    
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    char day[4], mon[4];
+    int wday, hh, mm, ss, year;
+    sscanf(ctime((time_t*) & (ts.tv_sec)), "%s %s %d %d:%d:%d %d",
+           day, mon, &wday, &hh, &mm, &ss, &year);
+    fprintf(stderr, "[ %s %s %d %d:%d:%d %ld ]\n", day, mon, wday, hh, mm, ss, ts.tv_nsec);
+#endif
+}
+
 std::vector<std::string> split(const std::string &text, char sep)
 {
     std::vector<std::string> tokens;

@@ -37,7 +37,7 @@ public:
 
     // Todo extract common code and move it to
     // base class (do the same for video and audiovideo streamers)
-    void sendMuxedData()
+    void streamMuxedData()
     {
         if (this->mClientConnectionsAndRequests.size() != 0 && this->mStatus == MEDIA_READY)
         {
@@ -87,6 +87,7 @@ private:
         if (this->mClientConnectionsAndRequests.size() == 0)
         {
             mAudioMuxer.stopMuxing();
+            this->mIsStreaming = false;           
         }
     }
 
@@ -101,6 +102,7 @@ private:
             this->mWrittenHeaderFlagAndRequests[clientRequest] = true;
 
         evhttp_send_reply_start(clientRequest, HTTP_OK, "OK");
+        this->mIsStreaming = true;        
         mAudioMuxer.startMuxing();
     }
 

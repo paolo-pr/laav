@@ -9,6 +9,8 @@
 
 #include "HTTPAudioVideoStreamer.hpp"
 #include "HTTPVideoStreamer.hpp"
+#include "UDPAudioVideoStreamer.hpp"
+#include "UDPVideoStreamer.hpp"
 
 namespace laav
 {
@@ -167,6 +169,63 @@ public:
         return httpVideoStreamer;
     }
 
+    template <typename Container, typename AudioCodec,
+              unsigned int audioSampleRate, enum AudioChannels audioChannels>
+    UDPAudioVideoStreamer<Container,
+                          EncodedVideoFrameCodec, width, height,
+                          AudioCodec, audioSampleRate, audioChannels>&
+    operator >>
+    (UDPAudioVideoStreamer<Container,
+                           EncodedVideoFrameCodec, width, height,
+                           AudioCodec, audioSampleRate, audioChannels>& udpAudioVideoStreamer)
+    {
+        if (mMediaStatusInPipe != MEDIA_READY)
+        {
+            mMediaStatusInPipe = MEDIA_READY;
+            return udpAudioVideoStreamer;
+        }
+        else
+        {
+            try
+            {
+                udpAudioVideoStreamer.takeStreamableFrame(lastEncodedFrame());
+                udpAudioVideoStreamer.streamMuxedData();
+            }
+            catch (const MediaException& mediaException)
+            {
+                // Do nothing, because the streamer is at the end of the pipe
+            }
+        }
+
+        return udpAudioVideoStreamer;
+    }
+
+    template <typename Container>
+    UDPVideoStreamer<Container, EncodedVideoFrameCodec, width, height>&
+    operator >>
+    (UDPVideoStreamer<Container, EncodedVideoFrameCodec, width, height>& udpVideoStreamer)
+    {
+        if (mMediaStatusInPipe != MEDIA_READY)
+        {
+            mMediaStatusInPipe = MEDIA_READY;
+            return udpVideoStreamer;
+        }
+        else
+        {
+            try
+            {
+                udpVideoStreamer.takeStreamableFrame(lastEncodedFrame());
+                udpVideoStreamer.streamMuxedData();
+            }
+            catch (const MediaException& mediaException)
+            {
+                // Do nothing, because the streamer is at the end of the pipe
+            }
+        }
+
+        return udpVideoStreamer;
+    }
+    
     /*!
      *  \exception MediaException(MEDIA_NO_DATA)
      */

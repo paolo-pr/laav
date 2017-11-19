@@ -66,11 +66,9 @@ public:
                     }
                     for (n = 0; n < mAudioVideoMuxer.muxedAudioVideoChunksOffset(); n++)
                     {
-
                         if (buf == NULL)
                             printAndThrowUnrecoverableError("buf == NULL");
                         evbuffer_add(buf, chunksToStream[n].data(), chunksToStream[n].size());
-
                     }
                     evhttp_send_reply_chunk(it->second, buf);
                     evbuffer_free(buf);
@@ -93,6 +91,7 @@ private:
         if (this->mClientConnectionsAndRequests.size() == 0)
         {
             mAudioVideoMuxer.stopMuxing();
+            this->mIsStreaming = false;
         }
     }
 
@@ -106,6 +105,7 @@ private:
             this->mWrittenHeaderFlagAndRequests[clientRequest] = true;
         evhttp_send_reply_start(clientRequest, HTTP_OK, "OK");
         mAudioVideoMuxer.startMuxing();
+        this->mIsStreaming = true;
     }
 
     FFMPEGAudioVideoMuxer<Container,

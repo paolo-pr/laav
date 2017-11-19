@@ -101,7 +101,29 @@ public:
 
         return httpAudioVideoStreamer;
     }
+    
+    template <typename Container, typename VideoCodec, unsigned int width, unsigned int height>
+    UDPAudioVideoStreamer<Container,
+                           VideoCodec, width, height,
+                           CodecOrFormat, audioSampleRate, audioChannels>&
+    operator >>
+    (UDPAudioVideoStreamer<Container,
+                            VideoCodec, width, height,
+                            CodecOrFormat, audioSampleRate, audioChannels>& udpAudioVideoStreamer)
+    {
+        try
+        {
+            udpAudioVideoStreamer.takeStreamableFrame(get());        
+            udpAudioVideoStreamer.streamMuxedData();
+        }
+        catch (const MediaException& mediaException)
+        {
+            // Do nothing, because the streamer is at the end of the pipe
+        }
 
+        return udpAudioVideoStreamer;
+    }    
+    
     template <typename AudioCodec>
     FFMPEGAudioEncoder<CodecOrFormat, AudioCodec, audioSampleRate, audioChannels>&
     operator >>
@@ -127,7 +149,7 @@ public:
         try
         {
             httpAudioStreamer.takeStreamableFrame(get());
-            httpAudioStreamer.sendMuxedData();
+            httpAudioStreamer.streamMuxedData();
         }
         catch (const MediaException& mediaException)
         {
@@ -137,6 +159,24 @@ public:
         return httpAudioStreamer;
     }
 
+    template <typename Container>
+    UDPAudioStreamer<Container, CodecOrFormat, audioSampleRate, audioChannels>&
+    operator >>
+    (UDPAudioStreamer<Container, CodecOrFormat, audioSampleRate, audioChannels>& udpAudioStreamer)
+    {
+        try
+        {
+            udpAudioStreamer.takeStreamableFrame(get());
+            udpAudioStreamer.streamMuxedData();
+        }
+        catch (const MediaException& mediaException)
+        {
+            // Do nothing, because the streamer is at the end of the pipe
+        }
+
+        return udpAudioStreamer;
+    }    
+    
     template <typename Container>
     FFMPEGAudioMuxer<Container, CodecOrFormat, audioSampleRate, audioChannels>&
     operator >>

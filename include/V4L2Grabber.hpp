@@ -221,7 +221,7 @@ public:
         try
         {
             httpVideoStreamer.takeStreamableFrame(grabNextFrame());
-            httpVideoStreamer.sendMuxedData();
+            httpVideoStreamer.streamMuxedData();
         }
         catch (const MediaException& mediaException)
         {
@@ -252,6 +252,45 @@ public:
         return httpAudioVideoStreamer;
     }
 
+    template <typename Container>
+    UDPVideoStreamer<Container, CodecOrFormat, width, height>&
+    operator >>
+    (UDPVideoStreamer<Container, CodecOrFormat, width, height>& udpVideoStreamer)
+    {
+        try
+        {
+            udpVideoStreamer.takeStreamableFrame(grabNextFrame());
+            udpVideoStreamer.streamMuxedData();
+        }
+        catch (const MediaException& mediaException)
+        {
+            // Do nothing, because the streamer is at the end of the pipe
+        }
+        return udpVideoStreamer;
+    }
+
+    template <typename Container, typename AudioCodec,
+              unsigned int audioSampleRate, enum AudioChannels audioChannels>
+    UDPAudioVideoStreamer<Container,
+                           CodecOrFormat, width, height,
+                           AudioCodec, audioSampleRate, audioChannels>&
+    operator >>
+    (UDPAudioVideoStreamer<Container,
+                            CodecOrFormat, width, height,
+                            AudioCodec, audioSampleRate, audioChannels>& udpAudioVideoStreamer)
+    {
+        try
+        {
+            udpAudioVideoStreamer.takeStreamableFrame(grabNextFrame());
+            udpAudioVideoStreamer.streamMuxedData();
+        }
+        catch (const MediaException& mediaException)
+        {
+            // Do nothing, because the streamer is at the end of the pipe
+        }
+        return udpAudioVideoStreamer;
+    }    
+    
     template <typename Container>
     FFMPEGVideoMuxer<Container, CodecOrFormat, width, height>&
     operator >>

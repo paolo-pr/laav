@@ -160,7 +160,6 @@ private:
 
         int64_t nowPts = av_gettime_relative();
         this->mInputLibAVFrame->pts = nowPts;
-
         int ret = avcodec_send_frame(this->mVideoEncoderCodecContext, this->mInputLibAVFrame);
         if (ret == AVERROR(EAGAIN))
         {

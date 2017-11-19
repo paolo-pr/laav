@@ -34,6 +34,14 @@ class FFMPEGMuxerCommonImpl
               unsigned int audioSampleRate, enum AudioChannels audioChannels>
     friend class HTTPAudioStreamer;
 
+    template <typename Container_, typename VideoCodecOrFormat,
+              unsigned int width, unsigned int height>
+    friend class UDPVideoStreamer;
+
+    template <typename Container_, typename AudioCodecOrFormat,
+              unsigned int audioSampleRate, enum AudioChannels audioChannels>
+    friend class UDPAudioStreamer;    
+    
 public:
 
     bool startMuxing(const std::string& outputFilename = "")
@@ -137,7 +145,10 @@ protected:
             printAndThrowUnrecoverableError("mMuxerAVIOContext = avio_alloc_context(...);");
 
         mMuxerContext->pb = mMuxerAVIOContext;
-
+#ifdef PAT_PMT_AT_FRAMES
+        av_opt_set(mMuxerContext->priv_data, "pat_pmt_at_frames", "1", 0);
+#endif
+        //av_opt_set(mMuxerContext->priv_data, "mpegts_flags", "pat_pmt_at_frames+resend_headers", 1);
         // TODO: improve design. First packets for audio and video
         // are set here in order to obtain a reference in muxNextUsefulFrameFromBuffer
         // in case one of the two media is not set
@@ -182,9 +193,11 @@ protected:
                 }
 
                 if (audioPktToMux.size != 0)
+                {
                     if (av_write_frame(this->mMuxerContext, &audioPktToMux) < 0)
-                        printAndThrowUnrecoverableError("av_write_frame(...)");
-
+                        printAndThrowUnrecoverableError("av_write_frame(...)");               
+                }
+                
                 mLastMuxedAudioFrameOffset =
                 (mLastMuxedAudioFrameOffset + 1) % mAudioAVPktsToMux.size();
 

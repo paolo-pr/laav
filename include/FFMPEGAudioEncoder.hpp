@@ -18,6 +18,8 @@ extern "C"
 #include "FFMPEGCommon.hpp"
 #include "HTTPAudioVideoStreamer.hpp"
 #include "HTTPAudioStreamer.hpp"
+#include "UDPAudioVideoStreamer.hpp"
+#include "UDPAudioStreamer.hpp"
 
 namespace laav
 {
@@ -82,21 +84,20 @@ public:
 
             // Buffering
             if (ret2 == AVERROR(EAGAIN))
-            {
+            {     
                 mEncodedAVPacketBufferOffset =
                 (mEncodedAVPacketBufferOffset + 1) % mEncodedAudioFrameBuffer.size();
-
                 return;
             }
             else if (ret2 != 0)
                 printAndThrowUnrecoverableError("avcodec_receive_packet(...)");
             else
             {
-
                 AudioFrame<AudioCodec, audioSampleRate, audioChannels>& currFrame =
                 mEncodedAudioFrameBuffer[mEncodedAudioFrameBufferOffset];
-
-                AVPacket& encodedPkt = mEncodedAudioPktBuffer[mEncodedAudioFrameBufferOffset];
+                
+                AVPacket& encodedPkt = currPkt; //mEncodedAudioPktBuffer[mEncodedAudioFrameBufferOffset];
+                
                 if (FFMPEGUtils::translateCodec<AudioCodec>() == AV_CODEC_ID_AAC)
                 {
                     if (!mAdtsHeaderWritten)
@@ -249,7 +250,7 @@ public:
             try
             {
                 httpAudioStreamer.takeStreamableFrame(lastEncodedFrame());
-                httpAudioStreamer.sendMuxedData();
+                httpAudioStreamer.streamMuxedData();
             }
             catch (const MediaException& mediaException)
             {
@@ -260,6 +261,60 @@ public:
         return httpAudioStreamer;
     }
 
+    template <typename Container, typename VideoCodec, unsigned int width, unsigned int height>
+    UDPAudioVideoStreamer<Container, VideoCodec, width, height,
+                           AudioCodec, audioSampleRate, audioChannels>&
+    operator >>
+    (UDPAudioVideoStreamer<Container, VideoCodec, width, height,
+                            AudioCodec, audioSampleRate, audioChannels>& udpAudioVideoStreamer)
+    {
+        if (mMediaStatusInPipe != MEDIA_READY)
+        {
+            mMediaStatusInPipe = MEDIA_READY;
+            return udpAudioVideoStreamer;
+        }
+        else
+        {
+            try
+            {
+                udpAudioVideoStreamer.takeStreamableFrame(lastEncodedFrame());
+                udpAudioVideoStreamer.streamMuxedData();
+            }
+            catch (const MediaException& mediaException)
+            {
+                // Do nothing, because the streamer is at the end of the pipe
+            }
+        }
+
+        return udpAudioVideoStreamer;
+    }
+
+    template <typename Container>
+    UDPAudioStreamer<Container, AudioCodec, audioSampleRate, audioChannels>&
+    operator >>
+    (UDPAudioStreamer<Container, AudioCodec, audioSampleRate, audioChannels>& udpAudioStreamer)
+    {
+        if (mMediaStatusInPipe != MEDIA_READY)
+        {
+            mMediaStatusInPipe = MEDIA_READY;
+            return udpAudioStreamer;
+        }
+        else
+        {
+            try
+            {
+                udpAudioStreamer.takeStreamableFrame(lastEncodedFrame());
+                udpAudioStreamer.streamMuxedData();
+            }
+            catch (const MediaException& mediaException)
+            {
+                // Do nothing, because the streamer is at the end of the pipe
+            }
+        }
+
+        return udpAudioStreamer;
+    }    
+    
     template <typename Container>
     FFMPEGAudioMuxer<Container, AudioCodec, audioSampleRate, audioChannels>&
     operator >>

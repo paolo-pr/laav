@@ -136,8 +136,21 @@ public:
 
             observeEventsOn(mPollFds[0].fd);
             snd_pcm_uframes_t availableSamples = snd_pcm_avail(mAlsaDevHandle);
+            bool mustReset = false;
             if (availableSamples > mSamplesPerPeriod)
-                availableSamples = mSamplesPerPeriod;
+            {
+                //FIXME?
+                if (availableSamples > mSamplesPerPeriod*8)
+                {
+                    /* 
+                       std::cerr << "Alsa Buffer underrun: available: " 
+                       << availableSamples << " samplesPerPeriod: " << 
+                       mSamplesPerPeriod << "\n"; 
+                    */                    
+                    mustReset = true;
+                }
+                availableSamples = mSamplesPerPeriod;                
+            }
             mCapturedRawAudioFrame.setSize(availableSamples * 2 * (audioChannels + 1));
             mCapturedRawAudioFrame.setTimestampsToNow();
             int ret = snd_pcm_readi(mAlsaDevHandle, mCapturedRawAudioDataPtr, availableSamples);
@@ -145,7 +158,8 @@ public:
             {
                 throw MediaException(MEDIA_NO_DATA);
             }
-
+            if(mustReset)
+                snd_pcm_reset(mAlsaDevHandle);
             mSamplesAvaible = false;
         }
         else
@@ -354,7 +368,7 @@ private:
             mUnrecoverableState = true;
             return false;
         }
-
+        
         snd_pcm_hw_params_get_period_size(mHWparams, &periodSize, &dir);
         if (periodSize != mSamplesPerPeriod)
             std::cerr << "[ALSAGrabber] WARNING: actual period size is set to: "

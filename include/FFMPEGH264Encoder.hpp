@@ -24,7 +24,7 @@ public:
     }
 
     FFMPEGH264Encoder(unsigned int bitrate, unsigned int gopSize,
-                      enum H264Presets preset, enum H264Profiles profile)
+                      enum H264Presets preset, enum H264Profiles profile, enum H264Tunes tune)
     {
         if (bitrate != DEFAULT_BITRATE)
             this->mVideoEncoderCodecContext->bit_rate = bitrate;
@@ -35,6 +35,9 @@ public:
                        "preset", convertToFFMPEGPreset(preset), 0);
         if (profile != H264_DEFAULT_PROFILE)
             this->mVideoEncoderCodecContext->profile = convertToFFMPEGProfile(profile);
+        if (tune != H264_DEFAULT_TUNE)
+            av_opt_set(this->mVideoEncoderCodecContext->priv_data,
+                       "tune", convertToFFMPEGTune(tune), 0);            
         this->completeEncoderInitialization();
     }
 

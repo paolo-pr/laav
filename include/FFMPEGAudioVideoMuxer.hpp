@@ -34,6 +34,15 @@ public FFMPEGMuxerAudioImpl<Container, AudioCodecOrFormat, audioSampleRate, audi
               enum AudioChannels audioChannels_>
    friend class HTTPAudioVideoStreamer;
 
+    template <typename Container_,
+              typename VideoCodecOrFormat_,
+              unsigned int width_,
+              unsigned int height_,
+              typename AudioCodecOrFormat_,
+              unsigned int audioSampleRate_,
+              enum AudioChannels audioChannels_>
+   friend class UDPAudioVideoStreamer;
+   
 public:
 
     FFMPEGAudioVideoMuxer(bool startMuxingSoon = false) :

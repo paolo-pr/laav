@@ -92,6 +92,7 @@ private:
         if (this->mClientConnectionsAndRequests.size() == 0)
         {
             mVideoMuxer.stopMuxing();
+            this->mIsStreaming = false;            
         }
 
     }
@@ -107,6 +108,7 @@ private:
             this->mWrittenHeaderFlagAndRequests[clientRequest] = true;
         evhttp_send_reply_start(clientRequest, HTTP_OK, "OK");
         mVideoMuxer.startMuxing();
+        this->mIsStreaming = true;
     }
 
     int64_t mLatency;
