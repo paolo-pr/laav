@@ -11,7 +11,7 @@ The system is composed as follows:
 ![Image](olss-server.png)
 
 * All the modules, except (3A) and (4), do not introduce significant latency.
-* Module (3A) (AAC encoder) requires a minimum latency of two frames (according to AAC specifications), which is printed as output from the streamer and is reflected on video latency due to the synchronization obtained by the module (4). It is minimized by selecting the highest sampling rate (in this case 44100, corresponding to ~45 ms overall latency).
+* Module (3A) (AAC encoder) requires a minimum latency of two frames (according to AAC specifications), which is printed as output by the streamer and is reflected on video latency due to the synchronization made by the module (4). It is minimized by selecting the highest sampling rate (in this case 44100, corresponding to ~45 ms overall latency).
 * Module (4) introduces 1 frame latency, which can be eliminated by installing ffmpeg with the patch included in patches/ffmpeg-3.2.4/libavformat/mpegtsenc.c
 
 **Client player**:
