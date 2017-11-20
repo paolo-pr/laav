@@ -21,7 +21,7 @@ The system is composed as follows:
 * Modules (1), (4A) do not introduce significant latency. In addition, the player ensures that (1) starts to push frames to (2A) and (2B) only when a first PCR is obtained.
 * Module (4B) introduces latency, here eliminated by setting the "max-threads = 1" property on the gstreamer decoder.
 * Each of the modules (2A), (2B), (3A), (3B) introduces the latency of 1 frame that can be eliminated by installing gst-plugins-bad-1.12.3 and gst-plugins-good-1.12-3 with their respective patches included in patches/gst-plugins-bad-1.12.3 and patches/gst-plugins-good-1.12.3; in addition, a PAT/PMT is sent for each muxed frame, on the streamer's muxer (4), in order to avoid further latency introduced by modules (2A) and (2B) when starting to parse the MPEGTS stream (not sure if it's necessary. Anyway: see the macro PAT_PMT_AT_FRAMES in FFMPEGMuxer.hpp).
-* Latencies introduced by (5A) and (5B) are minimized through the properties: buffer-time + latency-time (5A) and max-lateness on the gstreamer corresponding elements(5B)
+* Latencies introduced by (5A) and (5B) are minimized through the properties: buffer-time + latency-time (5A) and max-lateness (5B) on the gstreamer corresponding elements.
 
 The system is based on the idea that audio/video synchronization is performed on the server side and avoids using the synchronizer provided by gstreamer, which introduces a latency that is hard to eliminate. In order to avoid the above mentioned synchronizer, two different MPEGTS demuxers are used, one for the audio pipe and one for the video pipe, corresponding to two independent threads on the player.
 
