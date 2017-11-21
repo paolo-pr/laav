@@ -70,6 +70,7 @@ See the provided **[EXAMPLES](https://github.com/paolo-pr/laav/tree/master/examp
 ## TODO
 
 * Improve the compile-time error messages, for inconsistent pipes, with more static_assert(...) calls.
+* Add OPUS audio support (which could improve the Optimum Latency Streaming System too, avoiding the 2-frames latency introduced by the AAC encoder)
 * Add a RTSP/RTP streaming server.
 * Windows port (basically, it will consist in creating Windows based classes corresponding to the ALSAGrabber and V4L2Grabber classes, with the same API, and few other things: any contribution is welcome!).
 * MPEGTS-MJPEG is currently NOT supported.
