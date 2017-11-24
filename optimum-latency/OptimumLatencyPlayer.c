@@ -266,6 +266,9 @@ main(int argc, char *argv[])
     }
 
     gst_element_set_state(data.sink_pipeline, GST_STATE_NULL);
+    gst_element_set_state(data.audio_source_pipeline, GST_STATE_NULL);
+    gst_element_set_state(data.video_source_pipeline, GST_STATE_NULL);
+    
     gst_message_unref(msg);
     gst_object_unref(bus); 
     
