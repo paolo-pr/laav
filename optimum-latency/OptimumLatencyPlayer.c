@@ -67,7 +67,8 @@ on_new_sample_from_sink(GstElement *elt, custom_data *data)
     if (pcr_found)  
     {
         source = gst_bin_get_by_name(GST_BIN(data->audio_source_pipeline), "udpaudiosource");
-        ret = gst_app_src_push_buffer(GST_APP_SRC(source), app_buffer_1);  
+        ret = gst_app_src_push_buffer(GST_APP_SRC(source), app_buffer_1); 
+        gst_object_unref(source);
         source = gst_bin_get_by_name(GST_BIN(data->video_source_pipeline), "udpvideosource");
         ret = gst_app_src_push_buffer(GST_APP_SRC(source), app_buffer_2);
         gst_object_unref(source);
@@ -85,6 +86,7 @@ cb_have_data(GstPad          *pad,
               GstPadProbeInfo *info,
               gpointer         user_data)
 {
+    
     gint x, y;
     GstMapInfo map;
     guint16 *ptr, t;
@@ -100,9 +102,6 @@ cb_have_data(GstPad          *pad,
         exit(1);
     }
 
-    /* Making a buffer writable can fail(for example if it
-    * cannot be copied and is used more than once)
-    */
     if (buffer == NULL)
         return GST_PAD_PROBE_OK;
 
@@ -125,13 +124,14 @@ cb_have_data(GstPad          *pad,
     }
 
     printCurrDate();
-    g_printerr("%s  Timestamp=%ld   Size=%ld\n\n", *data_info, timestamp, 
-               gst_buffer_get_size(buffer));
+    g_printerr("%s  Timestamp=%" G_GUINT64_FORMAT "   Size=%" G_GSIZE_FORMAT "\n\n", 
+               *data_info, timestamp, gst_buffer_get_size(buffer));
     GST_PAD_PROBE_INFO_DATA(info) = buffer;
 
     //if (counter++ == 20)
     //    exit(0);  
-
+    gst_buffer_unmap (buffer, &map);
+    
     return GST_PAD_PROBE_OK;
 }
 
@@ -160,7 +160,7 @@ main(int argc, char *argv[])
     data.video_source_pipeline = gst_parse_launch 
     ("appsrc name=udpvideosource ! tsdemux name=videodemuxer ! h264parse name=videoparser "
      "! avdec_h264 name=videodecoder max-threads=1 "
-     "! xvimagesink sync=false async=false max-lateness=20000",
+     "! xvimagesink sync=false async=false max-lateness=10000",
      &error);  
 
     if (!data.sink_pipeline) 
@@ -169,69 +169,66 @@ main(int argc, char *argv[])
         exit(1);
     }
 
+    //gst_pipeline_set_latency(GST_PIPELINE(data.sink_pipeline), 10000 /*20000000*/);//10ms
+    
     data.udp_sink      = gst_bin_get_by_name(GST_BIN(data.sink_pipeline),          "udpsink");
-    data.udp_source    = gst_bin_get_by_name(GST_BIN(data.sink_pipeline),          "udpsrc");
-
-    data.audio_demuxer = gst_bin_get_by_name(GST_BIN(data.audio_source_pipeline),  "audiodemuxer");
-    data.audio_parser  = gst_bin_get_by_name(GST_BIN(data.audio_source_pipeline),  "audioparser");
-    data.audio_decoder = gst_bin_get_by_name(GST_BIN(data.audio_source_pipeline),  "audiodecoder");
-    data.audio_sink    = gst_bin_get_by_name(GST_BIN(data.audio_source_pipeline),  "audiosink");
-
-    data.video_demuxer = gst_bin_get_by_name(GST_BIN(data.video_source_pipeline),  "videodemuxer");  
-    data.video_parser  = gst_bin_get_by_name(GST_BIN(data.video_source_pipeline),  "videoparser");
-    data.video_decoder = gst_bin_get_by_name(GST_BIN(data.video_source_pipeline),  "videodecoder");
-    data.video_sink    = gst_bin_get_by_name(GST_BIN(data.video_source_pipeline),  "videosink");
-
-    //gst_pipeline_set_latency(GST_PIPELINE(data.sink_pipeline), 10000 /*20000000*/);//10ms  
-
     g_signal_connect(data.udp_sink, "new-sample",
                     G_CALLBACK(on_new_sample_from_sink), &data);
     gst_object_unref(data.udp_sink);
 
     GstPad* pad;
 
+    data.udp_source    = gst_bin_get_by_name(GST_BIN(data.sink_pipeline),          "udpsrc");    
     const char *data_source_0 = "UDPSRC      ";   
     pad = gst_element_get_static_pad(data.udp_source, "src");
     gst_pad_add_probe(pad, GST_PAD_PROBE_TYPE_BUFFER,
                        (GstPadProbeCallback) cb_have_data, &data_source_0, NULL);
     gst_object_unref(pad);
+    gst_object_unref(data.udp_source);    
     
+    data.audio_parser  = gst_bin_get_by_name(GST_BIN(data.audio_source_pipeline),  "audioparser");   
     const char *data_source_1 = "AUDIO DEMUXER";  
     pad = gst_element_get_static_pad(data.audio_parser, "sink");  
     gst_pad_add_probe(pad, GST_PAD_PROBE_TYPE_BUFFER,
                        (GstPadProbeCallback) cb_have_data, &data_source_1, NULL);
     gst_object_unref(pad);
-
     const char *data_source_2 = "AUDIO PARSER ";   
     pad = gst_element_get_static_pad(data.audio_parser, "src");
     gst_pad_add_probe(pad, GST_PAD_PROBE_TYPE_BUFFER,
                        (GstPadProbeCallback) cb_have_data, &data_source_2, NULL);
     gst_object_unref(pad);
+    gst_object_unref(data.audio_parser);    
 
+    data.audio_decoder = gst_bin_get_by_name(GST_BIN(data.audio_source_pipeline),  "audiodecoder");    
     const char *data_source_3 = "AUDIO DECODER";   
     pad = gst_element_get_static_pad(data.audio_decoder, "src");
     gst_pad_add_probe(pad, GST_PAD_PROBE_TYPE_BUFFER,
                        (GstPadProbeCallback) cb_have_data, &data_source_3, NULL);
     gst_object_unref(pad);
+    gst_object_unref(data.audio_decoder);
 
+    data.video_parser  = gst_bin_get_by_name(GST_BIN(data.video_source_pipeline),  "videoparser");    
     const char *data_source_4 = "VIDEO DEMUXER";
     pad = gst_element_get_static_pad(data.video_parser, "sink");  
     gst_pad_add_probe(pad, GST_PAD_PROBE_TYPE_BUFFER,
                        (GstPadProbeCallback) cb_have_data, &data_source_4, NULL);
     gst_object_unref(pad);  
-
     const char *data_source_5 = "VIDEO PARSER ";   
     pad = gst_element_get_static_pad(data.video_parser, "src");
     gst_pad_add_probe(pad, GST_PAD_PROBE_TYPE_BUFFER,
                        (GstPadProbeCallback) cb_have_data, &data_source_5, NULL);
     gst_object_unref(pad);
+    gst_object_unref(data.video_parser);    
 
+    data.video_decoder = gst_bin_get_by_name(GST_BIN(data.video_source_pipeline),  "videodecoder");    
     const char *data_source_6 = "VIDEO DECODER";   
     pad = gst_element_get_static_pad(data.video_decoder, "src");
     gst_pad_add_probe(pad, GST_PAD_PROBE_TYPE_BUFFER,
                        (GstPadProbeCallback) cb_have_data, &data_source_6, NULL);
-    gst_object_unref(pad);  
-
+    gst_object_unref(pad);
+    gst_object_unref(data.video_decoder);
+    
+    
     gst_element_set_state(data.sink_pipeline, GST_STATE_PLAYING);
     gst_element_set_state(data.audio_source_pipeline, GST_STATE_PLAYING);
     gst_element_set_state(data.video_source_pipeline, GST_STATE_PLAYING);  
@@ -248,8 +245,8 @@ main(int argc, char *argv[])
         }
         case GST_MESSAGE_ERROR: 
         {
-            GError *err = NULL; /* error to show to users                 */
-            gchar *dbg = NULL;  /* additional debug string for developers */
+            GError *err = NULL;
+            gchar *dbg = NULL;
 
             gst_message_parse_error(msg, &err, &dbg);
             if (err) 
@@ -267,11 +264,14 @@ main(int argc, char *argv[])
             g_printerr("Unexpected message of type %d", GST_MESSAGE_TYPE(msg));
             break;
     }
-    gst_message_unref(msg);
 
     gst_element_set_state(data.sink_pipeline, GST_STATE_NULL);
+    gst_message_unref(msg);
+    gst_object_unref(bus); 
+    
     gst_object_unref(data.sink_pipeline);
-    gst_object_unref(bus);
-
-  return 0;
+    gst_object_unref(data.video_source_pipeline);
+    gst_object_unref(data.audio_source_pipeline); 
+    
+    return 0;
 }
