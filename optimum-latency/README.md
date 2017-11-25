@@ -39,6 +39,7 @@ Due to the complexity of the project, any help/feedback is GREATLY appreciated!
 ## COMPILING 
 
 * Required: gstreamer-1.12.3, gst-plugins-bad-1.12.3 (with the patches included patches/gst-plugins-bad-1.12.3), gst-plugins-good-1.12.3 (with the patch included patches/gst-plugins-good-1.12.3), gst-plugins-base-1.12.3, gst-libav-1.12.3, ffmpeg-3.2.4 (with the patch included patches/ffmpeg-3.2.4).
+
 Be sure that ALL the gstreamer modules required by the player are properly installed (you can check that with gst-inspect-1.0 module-name): udpsrc, appsink, appsrc, tsdemux, aacparse, avdec_aac, pulsesink, h264parse, avdec_h264, xvimagesink.
 * Execute: ./Compile
 
