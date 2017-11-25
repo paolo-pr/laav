@@ -35,7 +35,7 @@ while (1)
 * All the audio/video modules (-> classes) make **extensive use of templates** and all their possible concatenations are checked at **compile-time**, so to avoid inconsistent pipes.
 * All the pipes are **safe at runtime**. I.E: when a source is disconnected or temporarily unavailable, the main loop can continue without necessarily having to check errors (they can be checked, anyway, by polling the status of each node: see **[THIS](https://github.com/paolo-pr/laav/blob/master/examples/AudioVideoExample_2.cpp)** example)
 * The library is all RAII-designed (basically it safely wraps Libav, V4L and ALSA) and **the user doesn't have to bother with pointers and memory management**.
-* The public API is intended to be intuitive, with few self-explanatory functions.
+* The public API is intended to be intuitive, with a few self-explanatory functions.
 
 ## COMPILING / RUNNING
 
