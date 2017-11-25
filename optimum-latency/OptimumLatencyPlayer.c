@@ -148,6 +148,8 @@ main(int argc, char *argv[])
     data.sink_pipeline = gst_parse_launch 
     //("souphttpsrc location=http://127.0.0.1:8082/stream.ts name=udpsrc 
     //! appsink name=udpsink emit-signals=true sync=false", 
+    
+    //You can try also to set the properties "blocksize and buffer-size" to small values on udpsrc
     ("udpsrc port=8082 name=udpsrc ! appsink name=udpsink emit-signals=true sync=false", 
      &error);
 
