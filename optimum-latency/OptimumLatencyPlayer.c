@@ -52,18 +52,18 @@ on_new_sample_from_sink(GstElement *elt, custom_data *data)
     GstElement *source2;  
     GstFlowReturn ret;
 
-    /* get the sample from appsink */
+    // get the sample from appsink
     sample = gst_app_sink_pull_sample(GST_APP_SINK(elt));
     buffer = gst_sample_get_buffer(sample);
 
-    /* make a copy */
+    // make a copy
     app_buffer_1 = gst_buffer_copy(buffer);
     app_buffer_2 = gst_buffer_copy(buffer);
 
-    /* we don't need the appsink sample anymore */
+    // we don't need the appsink sample anymore
     gst_sample_unref(sample);
 
-    /* get source an push new buffer */  
+    // get source an push new buffer  
     if (pcr_found)  
     {
         source = gst_bin_get_by_name(GST_BIN(data->audio_source_pipeline), "udpaudiosource");
