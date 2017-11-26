@@ -38,6 +38,9 @@ public:
     {
     }
 
+    /*!
+     *  \exception MediaException(MEDIA_NO_DATA)
+     */
     void takeStreamableFrame(const AudioFrame<AudioCodecOrFormat, audioSampleRate,
                                               audioChannels>& audioFrameToStream)
     {
