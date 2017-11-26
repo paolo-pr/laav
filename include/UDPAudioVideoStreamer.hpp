@@ -39,12 +39,18 @@ public:
     {
     }
 
+    /*!
+     *  \exception MediaException(MEDIA_NO_DATA)
+     */
     void takeStreamableFrame(const VideoFrame<VideoCodecOrFormat, width, height>& videoFrameToStream)
     {
         if (this->mStatus == MEDIA_READY)
             mAudioVideoMuxer.takeMuxableFrame(videoFrameToStream);
     }
 
+    /*!
+     *  \exception MediaException(MEDIA_NO_DATA)
+     */
     void takeStreamableFrame(const AudioFrame<AudioCodecOrFormat, audioSampleRate,
                                               audioChannels>& audioFrameToStream)
     {
