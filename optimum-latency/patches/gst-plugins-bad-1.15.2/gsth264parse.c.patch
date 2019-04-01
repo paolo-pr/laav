@@ -1,0 +1,11 @@
+--- gst/videoparsers/gsth264parse.c	2019-02-19 19:02:35.000000000 +0100
++++ gsth264parse.patched.c	2019-03-30 21:38:52.776847000 +0100
+@@ -1171,7 +1171,7 @@
+         GST_DEBUG_OBJECT (h264parse, "not a complete nal found at offset %u",
+             nalu.offset);
+         /* if draining, accept it as complete nal */
+-        if (drain) {
++        if (1) {
+           nonext = TRUE;
+           nalu.size = size - nalu.offset;
+           GST_DEBUG_OBJECT (h264parse, "draining, accepting with size %u",

@@ -1,0 +1,28 @@
+--- gst/mpegtsdemux/tsdemux.c	2018-11-11 01:01:31.000000000 +0100
++++ tsdemux.patch.c	2019-04-01 17:22:02.304624318 +0200
+@@ -3109,11 +3109,15 @@
+     MpegTSPacketizerPacket * packet, GstMpegtsSection * section)
+ {
+   GstFlowReturn res = GST_FLOW_OK;
+-
++  int push_it = 0;
++  
+   GST_LOG ("pid 0x%04x pusi:%d, afc:%d, cont:%d, payload:%p", packet->pid,
+       packet->payload_unit_start_indicator, packet->scram_afc_cc & 0x30,
+       FLAGS_CONTINUITY_COUNTER (packet->scram_afc_cc), packet->payload);
+ 
++  if (packet->data_end - packet->payload < 176)
++      push_it = 1;  
++  
+   if (G_UNLIKELY (packet->payload_unit_start_indicator) &&
+       FLAGS_HAS_PAYLOAD (packet->scram_afc_cc))
+     /* Flush previous data */
+@@ -3125,7 +3129,7 @@
+     GST_LOG ("current_size:%d, expected_size:%d",
+         stream->current_size, stream->expected_size);
+     /* Finally check if the data we queued completes a packet */
+-    if (stream->expected_size && stream->current_size == stream->expected_size) {
++    if ((stream->expected_size && stream->current_size == stream->expected_size) || push_it) {
+       GST_LOG ("pushing complete packet");
+       res = gst_ts_demux_push_pending_data (demux, stream, NULL);
+     }

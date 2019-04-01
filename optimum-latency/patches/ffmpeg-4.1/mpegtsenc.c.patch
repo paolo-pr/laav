@@ -1,0 +1,32 @@
+--- libavformat/mpegtsenc.c	2018-11-06 00:22:26.000000000 +0100
++++ mpegtsenc.c	2019-04-01 18:03:02.078542963 +0200
+@@ -1731,6 +1731,13 @@
+         }
+     }
+ 
++    if (st->codecpar->codec_id == AV_CODEC_ID_OPUS)
++    {
++        memcpy(ts_st->payload + ts_st->payload_size, buf, size);
++        ts_st->payload_size += size;
++        ts_st->opus_queued_samples += opus_samples;
++    }      
++    
+     if (pkt->dts != AV_NOPTS_VALUE) {
+         int i;
+         for(i=0; i<s->nb_streams; i++) {
+@@ -1774,9 +1781,12 @@
+         ts_st->payload_flags = pkt->flags;
+     }
+ 
+-    memcpy(ts_st->payload + ts_st->payload_size, buf, size);
+-    ts_st->payload_size += size;
+-    ts_st->opus_queued_samples += opus_samples;
++    if (st->codecpar->codec_id != AV_CODEC_ID_OPUS)
++    {
++        memcpy(ts_st->payload + ts_st->payload_size, buf, size);
++        ts_st->payload_size += size;
++        ts_st->opus_queued_samples += opus_samples;
++    }    
+ 
+     av_free(data);
+ 
