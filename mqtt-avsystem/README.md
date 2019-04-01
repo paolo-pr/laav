@@ -8,7 +8,7 @@ Recording/streaming system MQTT full-compliant. Particularly useful for home-aut
 
 * It creates a video grabber with "Cam1" id.
 
-* It connects to a MQTT broker and subscribe to two different topics: topicPrefix_IN and topicPrefix_OUT, where "topicPrefix" is passed as argument when launching the application. 
+* It connects to a MQTT broker and subscribe to two different topics: **topicPrefix_IN** and **topicPrefix_OUT**, where **"topicPrefix"** is passed as argument when launching the application. 
 
 * It creates two H264 encoders, with two different ids: "Cam1-Encoder-HQ" (640x480 resolution) and "Cam1-Encoder-LQ" (320x240 resolution).
 
