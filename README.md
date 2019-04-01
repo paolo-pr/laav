@@ -4,17 +4,17 @@
 
 A header-only **C++** library for capturing audio and video from multiple live sources (cameras and microphones) and
 
-* encoding (video: **H264**, audio: **AAC**, **MP2**)
-* decoding (video: **MJPEG**) / transcoding (video: **MJPEG** -> **H264**)
-* recording to file (**MPEGTS** and **MATROSKA** containers, audio and/or video)
-* streaming (**HTTP** and **UDP** protocols for **MPEGTS** and **MATROSKA** containers)
-* image processing
+* Encoding (video: **H264**, audio: **AAC**, **MP2**, **OPUS**)
+* Decoding (video: **MJPEG**) / transcoding (video: **MJPEG** -> **H264**)
+* Recording to file (**MPEGTS** and **MATROSKA** containers, audio and/or video)
+* Streaming (**HTTP** and **UDP** protocols for **MPEGTS** and **MATROSKA** containers)
+* Basic image processing
 
-The project is useful for building **video surveillance** systems as well, consisting in media servers which stream and record at the same time and which can be controlled through HTTP commands (see **[THIS](https://github.com/paolo-pr/laav/blob/master/examples/VideoExample_2.cpp)** example).
+The project is useful for building **video surveillance** systems as well, consisting in media servers which stream and record at the same time and which can be controlled through **MQTT** or **HTTP** commands (see **[THIS](https://github.com/paolo-pr/laav/blob/master/mqtt-avsystem/README.md)** and **[THIS](https://github.com/paolo-pr/laav/blob/master/examples/VideoExample_2.cpp)** examples).
 
-It also provides an **[experimental UDP audio (AAC) + video (H264) streaming system](https://github.com/paolo-pr/laav/blob/master/optimum-latency/README.md)** (streaming server + client player) with the **lowest possible latency**.
+It also provides an **[UDP audio (OPUS) + video (H264) streaming system](https://github.com/paolo-pr/laav/blob/master/optimum-latency/README.md)** with the **lowest possible latency**.
 
-The project runs on **Linux** (ALSA and V4L2 devices), but a Windows port is planned (any contribution is welcome!).
+The project runs on **Linux** (**ALSA** and **V4L2** devices), but a Windows port is planned (any contribution is welcome!).
 
 ## FEATURES
 
@@ -39,8 +39,8 @@ while (1)
 
 ## COMPILING / RUNNING
 
-Dependencies: **[FFMPEG](https://ffmpeg.org/)** >= 3.2.4 (tested with 3.2.4 version), **[libevent](http://libevent.org/)** and pkg-config (optional: see the compile command below).
-**[FFMPEG](https://ffmpeg.org/)** must be compiled with **[x264](http://www.videolan.org/developers/x264.html)** support.
+Dependencies: **[FFmpeg](https://ffmpeg.org/)** >= 4.1 (tested with 4.1 version), **[libevent](http://libevent.org/)** and pkg-config (optional: see the compile command below).
+**[FFmpeg](https://ffmpeg.org/)** must be compiled with **[x264](http://www.videolan.org/developers/x264.html)** and **[libopus](http://opus-codec.org/)** support.
 
 * Include the library headers, as shown in the [examples](https://github.com/paolo-pr/laav/tree/master/examples), in YourProgram.cpp and execute:
 ```
@@ -70,7 +70,6 @@ See the provided **[EXAMPLES](https://github.com/paolo-pr/laav/tree/master/examp
 ## TODO
 
 * Improve the compile-time error messages, for inconsistent pipes, with more static_assert(...) calls.
-* Add OPUS audio support (which could improve the Optimum Latency Streaming System too, avoiding the 2-frames latency introduced by the AAC encoder)
 * Add a RTSP/RTP streaming server.
 * Windows port (basically, it will consist in creating Windows based classes corresponding to the ALSAGrabber and V4L2Grabber classes, with the same API, and few other things: any contribution is welcome!).
 * MPEGTS-MJPEG is currently NOT supported.
