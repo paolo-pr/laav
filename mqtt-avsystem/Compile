@@ -1,0 +1,13 @@
+#!/bin/bash
+
+deps=`pkg-config --libs libavformat libavcodec libavutil libswresample libswscale libevent alsa`
+
+g++ -x c -Wextra -Wall -std=gnu99 -I MQTT-C/include -Wno-unused-parameter -Wno-unused-variable -Wno-duplicate-decl-specifier MQTT-C/src/mqtt.c -c -o mqtt.o
+
+g++ -x c -Wextra -Wall -std=gnu99 -I MQTT-C/include -Wno-unused-parameter -Wno-unused-variable -Wno-duplicate-decl-specifier MQTT-C/src/mqtt_pal.c -c -o mqtt_pal.o
+
+g++ -Wfatal-errors -Wall -std=c++11 -g -DLINUX -I MQTT-C/include -c -o MQTTLAAVSystem.o MQTTLAAVSystem.cpp -I ../include
+
+g++ -Wfatal-errors -Wall -std=c++11 -g -DLINUX mqtt.o mqtt_pal.o MQTTLAAVSystem.o -o MQTTLAAVSystem.bin $deps
+
+rm *.o
