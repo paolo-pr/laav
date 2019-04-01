@@ -33,38 +33,33 @@ namespace laav
 {
 
 template <typename InputPCMSoundFormat,
-          unsigned int inputAudioSampleRate,
-          enum AudioChannels inputAudioChannels,
+          typename inputAudioSampleRate,
+          typename inputAudioChannels,
           typename ConvertedPCMSoundFormat,
-          unsigned int convertedAudioSampleRate,
-          enum AudioChannels convertedAudioChannels>
-class FFMPEGAudioConverter
+          typename convertedAudioSampleRate,
+          typename convertedAudioChannels>
+class FFMPEGAudioConverter : public Medium
 {
 
 public:
 
-    FFMPEGAudioConverter() :
-        mMediaStatusInPipe(MEDIA_NOT_READY)
+    FFMPEGAudioConverter(const std::string& id = "") :
+        Medium(id)
     {
-        static_assert(inputAudioSampleRate == convertedAudioSampleRate,
+
+        static_assert(inputAudioSampleRate::value == convertedAudioSampleRate::value,
         "In and out samplerates must be equal (TODO: implement the case they are different");
         mSwrContext = swr_alloc();
         if (!mSwrContext)
             printAndThrowUnrecoverableError("(mSwrContext = swr_alloc();)");
 
-        av_opt_set_int(mSwrContext,
-                       "in_channel_count", (inputAudioChannels + 1), 0);
-        av_opt_set_int(mSwrContext,
-                       "in_sample_rate", inputAudioSampleRate, 0);
-        av_opt_set_sample_fmt(mSwrContext,
-                              "in_sample_fmt",
+        av_opt_set_int(mSwrContext, "in_channel_count", (inputAudioChannels::value + 1), 0);
+        av_opt_set_int(mSwrContext, "in_sample_rate", inputAudioSampleRate::value, 0);
+        av_opt_set_sample_fmt(mSwrContext, "in_sample_fmt",
                               FFMPEGUtils::translateSampleFormat<InputPCMSoundFormat>(), 0);
-        av_opt_set_int(mSwrContext,
-                       "out_channel_count", (convertedAudioChannels + 1), 0);
-        av_opt_set_int(mSwrContext,
-                       "out_sample_rate", convertedAudioSampleRate, 0);
-        av_opt_set_sample_fmt(mSwrContext,
-                              "out_sample_fmt",
+        av_opt_set_int(mSwrContext, "out_channel_count", (convertedAudioChannels::value + 1), 0);
+        av_opt_set_int(mSwrContext, "out_sample_rate", convertedAudioSampleRate::value, 0);
+        av_opt_set_sample_fmt(mSwrContext, "out_sample_fmt",
                               FFMPEGUtils::translateSampleFormat<ConvertedPCMSoundFormat>(), 0);
         int ret;
         // initialize the converting context
@@ -76,15 +71,16 @@ public:
             printAndThrowUnrecoverableError("mConvertedLibAVFrame = av_frame_alloc()");
 
         mConvertedLibAVFrame->format = FFMPEGUtils::translateSampleFormat<ConvertedPCMSoundFormat>();
-        mConvertedLibAVFrame->channel_layout = convertedAudioChannels + 1 == 1 ?
+        mConvertedLibAVFrame->channel_layout = convertedAudioChannels::value + 1 == 1 ?
             AV_CH_LAYOUT_MONO : AV_CH_LAYOUT_STEREO;
-        mConvertedLibAVFrame->sample_rate = convertedAudioSampleRate;
+        mConvertedLibAVFrame->sample_rate = convertedAudioSampleRate::value;
         // TODO: use a global variable?
         mConvertedLibAVFrame->nb_samples = 10000;
         if (av_frame_get_buffer(mConvertedLibAVFrame, 0) < 0)
             printAndThrowUnrecoverableError("av_frame_get_buffer(mConvertedLibAVFrame, 0)");
-
+        
         fillConvertedAudioFrame(mConvertedAudioFrame);
+        Medium::mInputStatus = READY;
     }
 
     ~FFMPEGAudioConverter()
@@ -94,16 +90,25 @@ public:
     }
 
     /*!
-     *  \exception MediaException(MEDIA_NO_DATA)
+     *  \exception MediumException    * 
      */
     AudioFrame<ConvertedPCMSoundFormat, convertedAudioSampleRate, convertedAudioChannels>&
-    convert(const AudioFrame<InputPCMSoundFormat, inputAudioSampleRate, inputAudioChannels>&
+    convert(const AudioFrame<InputPCMSoundFormat, inputAudioSampleRate,             inputAudioChannels>&
             inputAudioFrame)
-    {
-        if (isFrameEmpty(inputAudioFrame))
-            throw MediaException(MEDIA_NO_DATA);
+    {        
+        if (inputAudioFrame.isEmpty())
+            throw MediumException(INPUT_EMPTY);
 
-        int inputSamplesNum = inputAudioFrame.size() / (2 * (inputAudioChannels + 1));
+        Medium::mDistanceFromInputAudioFrameFactory = inputAudioFrame.mDistanceFromFactory + 1;
+        Medium::mInputAudioFrameFactoryId = inputAudioFrame.mFactoryId;        
+
+        if (Medium::mStatusInPipe ==  NOT_READY)
+            throw MediumException(PIPE_NOT_READY);
+        
+        if (Medium::mInputStatus ==  PAUSED)
+            throw MediumException(MEDIUM_PAUSED); 
+        
+        int inputSamplesNum = inputAudioFrame.size() / (2 * (inputAudioChannels::value + 1));
         int outSamplesNum = swr_get_out_samples(mSwrContext, inputSamplesNum );
         const unsigned char* inputData = inputAudioFrame.data();
         int ret = swr_convert(mSwrContext, mConvertedLibAVFrame->data,
@@ -113,6 +118,11 @@ public:
 
         convert1(mConvertedAudioFrame, outSamplesNum);
         mConvertedAudioFrame.setTimestampsToNow();
+        
+        mConvertedAudioFrame.mFactoryId = Medium::mId;
+        mConvertedAudioFrame.mDistanceFromFactory = 0;
+        
+        Medium::mOutputStatus = READY;        
         return mConvertedAudioFrame;
     }
 
@@ -121,29 +131,25 @@ public:
     (AudioFrameHolder<ConvertedPCMSoundFormat, convertedAudioSampleRate, convertedAudioChannels>&
      audioFrameHolder)
     {
-        if (mMediaStatusInPipe == MEDIA_READY)
-            audioFrameHolder.mMediaStatusInPipe = MEDIA_READY;
-        else
-        {
-            audioFrameHolder.mMediaStatusInPipe = mMediaStatusInPipe;
-            mMediaStatusInPipe = MEDIA_READY;
-            return audioFrameHolder;
-        }
+        Medium& m = audioFrameHolder;
+        setDistanceFromInputAudioFrameFactory(m, 1);        
+        setInputAudioFrameFactoryId(m, mId);         
+        setStatusInPipe(m, mStatusInPipe);
+        
         try
         {
-            audioFrameHolder.hold(mConvertedAudioFrame);
-            audioFrameHolder.mMediaStatusInPipe = MEDIA_READY;
+            audioFrameHolder.hold(mConvertedAudioFrame);           
         }
-        catch (const MediaException& mediaException)
+        catch (const MediumException& me)
         {
-            audioFrameHolder.mMediaStatusInPipe = mediaException.cause();
+            setStatusInPipe(m, NOT_READY);            
         }
         return audioFrameHolder;
     }
 
     template <typename ReConvertedPCMSoundFormat,
-              unsigned int reConvertedAudioSampleRate,
-              enum AudioChannels reConvertedAudioChannels>
+              typename reConvertedAudioSampleRate,
+              typename reConvertedAudioChannels>
     FFMPEGAudioConverter<ConvertedPCMSoundFormat,
                          convertedAudioSampleRate,
                          convertedAudioChannels,
@@ -158,21 +164,18 @@ public:
                           reConvertedAudioSampleRate,
                           reConvertedAudioChannels>& audioReConverter)
     {
-        if (mMediaStatusInPipe == MEDIA_READY)
-            audioReConverter.mMediaStatusInPipe = MEDIA_READY;
-        else
-        {
-            audioReConverter.mMediaStatusInPipe = mMediaStatusInPipe;
-            mMediaStatusInPipe = MEDIA_READY;
-            return audioReConverter;
-        }
+        Medium& m = audioReConverter;
+        setDistanceFromInputAudioFrameFactory(m, 1);        
+        setInputAudioFrameFactoryId(m, mId);         
+        setStatusInPipe(m, mStatusInPipe);
+        
         try
         {
-            audioReConverter.convert(mConvertedAudioFrame);
+            audioReConverter.convert(mConvertedAudioFrame);         
         }
-        catch (const MediaException& mediaException)
+        catch (const MediumException& me)
         {
-            audioReConverter.mMediaStatusInPipe = mediaException.cause();
+            setStatusInPipe(m, NOT_READY);            
         }
         return audioReConverter;
     }
@@ -188,29 +191,22 @@ public:
                         convertedAudioSampleRate,
                         convertedAudioChannels>& audioEncoder)
     {
-        if (mMediaStatusInPipe == MEDIA_READY)
-            audioEncoder.mMediaStatusInPipe = MEDIA_READY;
-        else
-        {
-            audioEncoder.mMediaStatusInPipe = mMediaStatusInPipe;
-            mMediaStatusInPipe = MEDIA_READY;
-            return audioEncoder;
-        }
-
+        Medium& m = audioEncoder;
+        setDistanceFromInputAudioFrameFactory(m, 1);        
+        setInputAudioFrameFactoryId(m, mId);          
+        setStatusInPipe(m, mStatusInPipe);
+        
         try
         {
             audioEncoder.encode(mConvertedAudioFrame);
         }
-        catch (const MediaException& mediaException)
+        catch (const MediumException& me)
         {
-            audioEncoder.mMediaStatusInPipe = mediaException.cause();
+            setStatusInPipe(m, NOT_READY);            
         }
 
         return audioEncoder;
     }
-
-    // TODO: private with friend framer, decoder
-    enum MediaStatus mMediaStatusInPipe;
 
 private:
 
@@ -261,7 +257,7 @@ private:
         int bytesPerSample =
         av_get_bytes_per_sample(FFMPEGUtils::translateSampleFormat<ConvertedPCMSoundFormat>());
 
-        mConvertedAudioFrame.setSize(outSamplesNum * bytesPerSample * (convertedAudioChannels + 1));
+        mConvertedAudioFrame.setSize(outSamplesNum * bytesPerSample * (convertedAudioChannels::value + 1));       
     }
 
     // TODO: find a better name

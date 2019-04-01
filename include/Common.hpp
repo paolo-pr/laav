@@ -19,11 +19,13 @@
 #ifndef COMMON_HPP_INCLUDED
 #define COMMON_HPP_INCLUDED
 
+#include "Medium.hpp"
 #include <tuple>
 #include <type_traits>
 #include <vector>
 #include <typeinfo>
 #include <string.h>
+#include <iostream>
 
 #ifdef LINUX
     #include <signal.h>
@@ -54,29 +56,8 @@ unsigned int encodedAudioFrameBufferSize = 100;
 
 unsigned int DEFAULT_BITRATE = -1;
 unsigned int DEFAULT_GOPSIZE = -1;
-
-enum MediaStatus {MEDIA_READY, MEDIA_NOT_READY, MEDIA_BUFFERING, MEDIA_NO_DATA};
-
-class MediaException
-{
-
-public:
-
-    MediaException(enum MediaStatus cause)
-    {
-        mCause = cause;
-    }
-
-    enum MediaStatus cause() const
-    {
-        return mCause;
-    }
-
-private:
-
-    enum MediaStatus mCause;
-
-};
+unsigned int DEFAULT_SAMPLERATE = 0;
+unsigned int DEFAULT_FRAMERATE = -1;
 
 enum DeviceStatus
 {
@@ -89,9 +70,9 @@ enum DeviceStatus
     DEV_DISCONNECTED
 };
 
-class OutOfBounds
-{
-};
+class OutOfBounds {};
+
+class Void {};
 
 #ifdef LINUX
 void ignoreSigpipe()
@@ -125,9 +106,85 @@ void printCurrDate()
     int wday, hh, mm, ss, year;
     sscanf(ctime((time_t*) & (ts.tv_sec)), "%s %s %d %d:%d:%d %d",
            day, mon, &wday, &hh, &mm, &ss, &year);
-    fprintf(stderr, "[ %s %s %d %d:%d:%d %ld ]\n", day, mon, wday, hh, mm, ss, ts.tv_nsec);
+    fprintf(stderr, "[ %s %s %d %d:%d:%d %ld ]", day, mon, wday, hh, mm, ss, ts.tv_nsec);
 #endif
 }
+
+static unsigned LAAVLogLevel = 0;
+
+class LAAVLogger 
+{
+
+class LAAVLoggerPrv
+{
+    public:
+        
+    LAAVLoggerPrv(unsigned instanceLogLevel) : mInstanceLogLevel(instanceLogLevel) {}  
+    
+    template <typename T>
+    LAAVLoggerPrv& operator<<(T& t)
+    {
+        if (mInstanceLogLevel <= LAAVLogLevel)
+        {
+            std::cerr << t;
+        }
+        return *this;
+    }    
+
+    LAAVLoggerPrv& operator<<(std::ostream& (*func)(std::ostream&))
+    {
+        if (mInstanceLogLevel <= LAAVLogLevel)
+        {
+            std::cerr << func;
+        }        
+        return *this;
+    }  
+    private:
+    
+    unsigned mInstanceLogLevel;    
+};    
+    
+public: 
+
+LAAVLogger(unsigned instanceLogLevel) : 
+    mLoggerPrv(instanceLogLevel),
+    mInstanceLogLevel(instanceLogLevel) 
+    {}    
+    
+template <typename T>
+LAAVLoggerPrv& operator<<(T& t)
+{
+    if (mInstanceLogLevel <= LAAVLogLevel)
+    {
+        printCurrDate();
+        std::cerr << " [LAAVLogger] " << t;
+    }
+    return mLoggerPrv;
+}    
+
+LAAVLoggerPrv& operator<<(std::ostream& (*func)(std::ostream&))
+{
+    if (mInstanceLogLevel <= LAAVLogLevel)
+    {
+        printCurrDate();
+        std::cerr << " [LAAVLogger] " << func;
+    }    
+    return mLoggerPrv;
+}  
+
+
+
+private:
+    
+    LAAVLoggerPrv mLoggerPrv;
+    unsigned mInstanceLogLevel;
+    
+};
+
+LAAVLogger loggerLevel1(1);
+LAAVLogger loggerLevel2(2);
+LAAVLogger loggerLevel3(3);
+LAAVLogger loggerLevel4(4);
 
 std::vector<std::string> split(const std::string &text, char sep)
 {
@@ -142,6 +199,21 @@ std::vector<std::string> split(const std::string &text, char sep)
     return tokens;
 }
 
+std::vector<std::string> split (const std::string& s, const std::string& delimiter) {
+    size_t posStart = 0, posEnd, delimLen = delimiter.length();
+    std::string token;
+    std::vector<std::string> res;
+
+    while ((posEnd = s.find (delimiter, posStart)) != std::string::npos) {
+        token = s.substr (posStart, posEnd - posStart);
+        posStart = posEnd + delimLen;
+        res.push_back (token);
+    }
+
+    res.push_back (s.substr (posStart));
+    return res;
+}
+
 typedef std::shared_ptr<unsigned char> ShareableVideoFrameData;
 typedef std::shared_ptr<unsigned char> ShareableAudioFrameData;
 typedef std::shared_ptr<unsigned char> ShareableMuxedData;
@@ -149,7 +221,64 @@ typedef std::shared_ptr<unsigned char> ShareableMuxedData;
 class MPEGTS {};
 class MATROSKA {};
 
-enum AudioChannels {MONO, STEREO};
+typedef std::integral_constant<unsigned int,0> MONO;
+typedef std::integral_constant<unsigned int,1> STEREO;
+enum class AudioChannels {MONO, STEREO};
+
+template <int Val>
+struct UnsignedConstant : public std::integral_constant<unsigned int,Val> {};
+
+template <typename T>
+std::string constantToString();
+
+class OPUS;
+template <>
+std::string constantToString<OPUS>()
+{
+    return "OPUS";
+}
+
+class MP2;
+template <>
+std::string constantToString<MP2>()
+{
+    return "MP2";
+}
+
+class ADTS_AAC;
+template <>
+std::string constantToString<ADTS_AAC>()
+{
+    return "ADTS_AAC";
+}
+
+class H264;
+template <>
+std::string constantToString<H264>()
+{
+    return "H264";
+}
+
+class MJPEG;
+template <>
+std::string constantToString<MJPEG>()
+{
+    return "MJPEG";
+}
+
+class MPEGTS;
+template <>
+std::string constantToString<MPEGTS>()
+{
+    return "MPEGTS";
+}
+
+class MATROSKA;
+template <>
+std::string constantToString<MATROSKA>()
+{
+    return "MATROSKA";
+}
 
 }
 

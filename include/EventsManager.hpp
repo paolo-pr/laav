@@ -43,6 +43,8 @@ extern "C"
 namespace laav
 {
 
+static bool LAAVStop = false;    
+    
 enum EventType {EVENT_READ, EVENT_WRITE, EVENT_READWRITE};
 
 class EventsCatcher
@@ -70,10 +72,20 @@ public:
 
 private:
 
+    static void signalHandler(int sig)
+    {
+        LAAVStop = true;        
+    }    
+    
     EventsCatcher():
         mObservedEvents(0)
     {
+#ifdef LINUX
         ignoreSigpipe();
+        signal(SIGINT, signalHandler);
+        signal(SIGTERM, signalHandler);
+        signal(SIGABRT, signalHandler);
+#endif
         event_init();
         mEventBaseConfig = event_config_new();
         if (event_config_require_features(mEventBaseConfig, EV_FEATURE_FDS) < 0)
@@ -223,7 +235,7 @@ protected:
     }
 
 private:
-
+    
     static void libeventCallback(evutil_socket_t fd, short what, void *arg)
     {
         EventsProducer* producer = static_cast<EventsProducer* >(arg);
