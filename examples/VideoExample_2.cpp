@@ -20,9 +20,7 @@
  * frames, encodes (H264) and streams the resulting video through HTTP with a 
  * MPEGTS container.
  * 
- * The stream's address is:
- * 
- *   http://127.0.0.1:8080/stream.ts
+ * The stream's address is printed in the output log.
  * 
  * A video muxer (FFMPEGVideoMuxer) is included in the pipe in order to record to file 
  * the encoded stream. The muxer is controlled by a HTTP server (HTTPCommandsReceiver) 
@@ -41,14 +39,12 @@
  *   curl --data "stop=yes" http://127.0.0.1:8081/commands
  * 
  */
-
-#include "V4L2Grabber.hpp"
-#include "HTTPCommandsReceiver.hpp"
-
-#define WIDTH 640
-#define HEIGHT 480
+#include "LAAV.hpp"
 
 using namespace laav;
+
+typedef UnsignedConstant<640> WIDTH;
+typedef UnsignedConstant<480> HEIGHT;
 
 int main(int argc, char** argv)
 {
@@ -59,12 +55,13 @@ int main(int argc, char** argv)
         return 1;
     }
 
+    LAAVLogLevel = 1;    
     std::string addr = "127.0.0.1";
     
     SharedEventsCatcher eventsCatcher = EventsManager::createSharedEventsCatcher();
 
     V4L2Grabber <YUYV422_PACKED, WIDTH, HEIGHT>
-    vGrab(eventsCatcher, argv[1]);
+    vGrab(eventsCatcher, argv[1], DEFAULT_FRAMERATE);
 
     VideoFrameHolder <YUYV422_PACKED, WIDTH, HEIGHT>
     vFh1;    
@@ -73,12 +70,13 @@ int main(int argc, char** argv)
     vConv;
 
     FFMPEGH264Encoder <YUV420_PLANAR, WIDTH, HEIGHT>
-    vEnc(DEFAULT_BITRATE, DEFAULT_GOPSIZE, H264_ULTRAFAST, H264_DEFAULT_PROFILE, H264_DEFAULT_TUNE);
+    vEnc(DEFAULT_BITRATE, DEFAULT_GOPSIZE, H264_ULTRAFAST, H264_DEFAULT_PROFILE, H264_ZEROLATENCY);
 
     VideoFrameHolder <H264, WIDTH, HEIGHT>
     vFh2;
     
-    FFMPEGVideoMuxer <MPEGTS, H264, WIDTH, HEIGHT> vMux;
+    FFMPEGVideoMuxer <MPEGTS, H264, WIDTH, HEIGHT> 
+    vMux;
     
     HTTPVideoStreamer <MPEGTS, H264, WIDTH, HEIGHT>
     vStream(eventsCatcher, addr, 8080);
@@ -94,21 +92,22 @@ int main(int argc, char** argv)
     YUVPixel pix;
     pix.set(149, 43, 21);
     
-    while (1)
+    while (!LAAVStop)
     {
         // Decode and execute HTTP commands
-        std::map<std::string, std::string>& cmds = commandsReceiver.receivedCommands();
-        if (cmds.size() != 0)
-        {
+        try
+        {        
+            std::map<std::string, std::string>& cmds = commandsReceiver.receivedCommands();
             if (cmds.find("stop") != cmds.end())
                 break;
             else if (cmds.find("startRecording") != cmds.end())
-                vMux.startMuxing(cmds["startRecording"]);
+                vMux.startRecording(cmds["startRecording"]);
             else if (cmds.find("stopRecording") != cmds.end())
-                vMux.stopMuxing();
+                vMux.stopRecording();
             
             commandsReceiver.clearCommands();
-        }         
+        }
+        catch (const MediumException& me) {}
  
         // Begin the video pipe and hold grabbed frames in vFh
         vGrab >> vFh1;
@@ -123,18 +122,18 @@ int main(int argc, char** argv)
         {
             VideoFrame<YUYV422_PACKED, WIDTH, HEIGHT>& grabbedFrame = vFh1.get();
             unsigned int i;
-            for (i = WIDTH/4; i < (WIDTH - WIDTH/4); i++)
+            for (i = WIDTH::value/4; i < (WIDTH::value - WIDTH::value/4); i++)
             {
-                grabbedFrame.setPixelAt(pix, i, HEIGHT/4);
-                grabbedFrame.setPixelAt(pix, i, HEIGHT - HEIGHT/4);                
+                grabbedFrame.setPixelAt(pix, i, HEIGHT::value/4);
+                grabbedFrame.setPixelAt(pix, i, HEIGHT::value - HEIGHT::value/4);                
             }
-            for (i = HEIGHT/4; i < (HEIGHT - HEIGHT/4); i++)
+            for (i = HEIGHT::value/4; i < (HEIGHT::value - HEIGHT::value/4); i++)
             {
-                grabbedFrame.setPixelAt(pix, WIDTH/4, i);
-                grabbedFrame.setPixelAt(pix, WIDTH - WIDTH/4, i);                
+                grabbedFrame.setPixelAt(pix, WIDTH::value/4, i);
+                grabbedFrame.setPixelAt(pix, WIDTH::value - WIDTH::value/4, i);                
             }            
         } 
-        catch (const MediaException& me) {}
+        catch (const MediumException& me) {}
 
         // Complete the video pipe (encode, stream and mux to file)
         vFh1 >> vConv >> vEnc >> vFh2;

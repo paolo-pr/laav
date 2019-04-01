@@ -18,9 +18,7 @@
  *
  * This example shows how to grab audio and video from a V4L camera and an ALSA device,
  * encode (MP2 + H264) and stream it through HTTP with a MPEGTS container.
- * The stream's address is:
- *
- *   http://127.0.0.1:8080/stream.ts
+ * The stream's address is printed in the output log.
  *
  * It also shows how to manage errors during the media tasks.
  * Laav deals four error/exception types:
@@ -47,14 +45,13 @@
  *
  */
 
-#include "AlsaGrabber.hpp"
-#include "V4L2Grabber.hpp"
-
-#define SAMPLE_RATE 16000
-#define WIDTH 640
-#define HEIGHT 480
+#include "LAAV.hpp"
 
 using namespace laav;
+
+typedef UnsignedConstant<16000> SAMPLERATE;
+typedef UnsignedConstant<640> WIDTH;
+typedef UnsignedConstant<480> HEIGHT;
 
 int main(int argc, char** argv)
 {
@@ -66,21 +63,22 @@ int main(int argc, char** argv)
         return 1;
     }
 
+    LAAVLogLevel = 1;
     std::string addr = "127.0.0.1";
 
     SharedEventsCatcher eventsCatcher = EventsManager::createSharedEventsCatcher();
 
-    AlsaGrabber <S16_LE, SAMPLE_RATE, MONO>
-    aGrab(eventsCatcher, argv[1]);
+    AlsaGrabber <S16_LE, SAMPLERATE, MONO>
+    aGrab(eventsCatcher, argv[1], DEFAULT_SAMPLERATE);
 
-    FFMPEGMP2Encoder <S16_LE, SAMPLE_RATE, MONO>
+    FFMPEGMP2Encoder <S16_LE, SAMPLERATE, MONO>
     aEnc;
 
-    AudioFrameHolder <MP2, SAMPLE_RATE, MONO>
+    AudioFrameHolder <MP2, SAMPLERATE, MONO>
     aFh;
 
     V4L2Grabber <YUYV422_PACKED, WIDTH, HEIGHT>
-    vGrab(eventsCatcher, argv[2]);
+    vGrab(eventsCatcher, argv[2], DEFAULT_FRAMERATE);
 
     FFMPEGVideoConverter <YUYV422_PACKED, WIDTH, HEIGHT, YUV420_PLANAR, WIDTH, HEIGHT>
     vConv;
@@ -91,18 +89,18 @@ int main(int argc, char** argv)
     VideoFrameHolder <H264, WIDTH, HEIGHT>
     vFh;
 
-    HTTPAudioVideoStreamer <MPEGTS, H264, WIDTH, HEIGHT, MP2, SAMPLE_RATE, MONO>
+    HTTPAudioVideoStreamer <MPEGTS, H264, WIDTH, HEIGHT, MP2, SAMPLERATE, MONO>
     avStream_1(eventsCatcher, addr, 8080);
 
     // We intentionally use an already open port (error test)
-    HTTPAudioVideoStreamer <MPEGTS, H264, WIDTH, HEIGHT, MP2, SAMPLE_RATE, MONO>
+    HTTPAudioVideoStreamer <MPEGTS, H264, WIDTH, HEIGHT, MP2, SAMPLERATE, MONO>
     avStream_2(eventsCatcher, addr, 8080);
 
     bool showVideoGrabError = true;
     bool showAudioGrabError = true;
     bool showAudioVideoStreamError = true;
 
-    while (1)
+    while (!LAAVStop)
     {
         /*
          * AUDIO/VIDEO pipes
@@ -118,7 +116,7 @@ int main(int argc, char** argv)
         /*
          * ERROR HANDLING
          */
-        if (avStream_2.status() != MEDIA_READY)
+        if (avStream_2.inputStatus() != READY)
         {
             if (showAudioVideoStreamError)
             {
@@ -129,7 +127,7 @@ int main(int argc, char** argv)
             }
         }
 
-        if (vGrab.status() != DEV_CAN_GRAB)
+        if (vGrab.deviceStatus() != DEV_CAN_GRAB)
         {
             if (showVideoGrabError)
             {

@@ -18,18 +18,16 @@
  *
  * This example shows how to grab video from a V4L camera,
  * encode (H264) and stream it through HTTP with a MPEGTS container.
- * The stream's address is:
- * 
- *   http://127.0.0.1:8080/stream.ts
+ * The stream's address is printed in the output log.
  * 
  */
 
-#include "V4L2Grabber.hpp"
-
-#define WIDTH 640
-#define HEIGHT 480
+#include "LAAV.hpp"
 
 using namespace laav;
+
+typedef UnsignedConstant<640> WIDTH;
+typedef UnsignedConstant<480> HEIGHT;
 
 int main(int argc, char** argv)
 {
@@ -40,28 +38,29 @@ int main(int argc, char** argv)
         return 1;
     }
 
+    LAAVLogLevel = 1;    
     SharedEventsCatcher eventsCatcher = EventsManager::createSharedEventsCatcher();
 
     V4L2Grabber <YUYV422_PACKED, WIDTH, HEIGHT>
-    vGrab(eventsCatcher, argv[1]);
+    vGrab(eventsCatcher, argv[1], DEFAULT_FRAMERATE);
 
     // Needed for the H264 encoder (it accepts only PLANAR formats)
-    FFMPEGVideoConverter <YUYV422_PACKED, WIDTH, HEIGHT, YUV420_PLANAR, WIDTH, HEIGHT>
+    FFMPEGVideoConverter <YUYV422_PACKED, WIDTH, HEIGHT, YUV422_PLANAR, WIDTH, HEIGHT>
     vConv;
 
-    FFMPEGH264Encoder <YUV420_PLANAR, WIDTH, HEIGHT>
-    vEnc(DEFAULT_BITRATE, 5, H264_ULTRAFAST, H264_DEFAULT_PROFILE, H264_DEFAULT_TUNE);
+    FFMPEGH264Encoder <YUV422_PLANAR, WIDTH, HEIGHT>
+    vEnc(DEFAULT_BITRATE, 5, H264_DEFAULT_PRESET, H264_DEFAULT_PROFILE, H264_ZEROLATENCY);
 
     HTTPVideoStreamer <MPEGTS, H264, WIDTH, HEIGHT>
     vStream(eventsCatcher, "127.0.0.1", 8080);
 
-    while (1)
+    while (!LAAVStop)
     {
         vGrab >> vConv >> vEnc >> vStream;
         
         eventsCatcher->catchNextEvent();
     }
-    
+  
     return 0;
 
 }

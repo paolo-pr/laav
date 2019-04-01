@@ -25,21 +25,15 @@
  * 
  *   arecord -L
  * 
- * The streams' addresses are:
- *
- *   (MATROSKA - MP2)
- *   http://127.0.0.1:8080/stream.mkv 
- * 
- *   (MPEGTS - AAC) 
- *   http://127.0.0.1:8081/stream.ts
+ * The streams' addresses are printed in the output log.
  *
  */
 
-#include "AlsaGrabber.hpp"
-
-#define SAMPLE_RATE 16000
+#include "LAAV.hpp"
 
 using namespace laav;
+
+typedef UnsignedConstant<16000> SAMPLERATE;
 
 int main(int argc, char** argv)
 {
@@ -52,34 +46,35 @@ int main(int argc, char** argv)
         return 1;
     }    
 
+    LAAVLogLevel = 1;
     std::string addr = "127.0.0.1";    
     
     SharedEventsCatcher eventsCatcher = EventsManager::createSharedEventsCatcher();
    
-    AlsaGrabber <S16_LE, SAMPLE_RATE, MONO>
-    aGrab(eventsCatcher, argv[1]);
+    AlsaGrabber <S16_LE, SAMPLERATE, MONO>
+    aGrab(eventsCatcher, argv[1], DEFAULT_SAMPLERATE);
     
     // Split the main pipe into two sub-pipes
-    AudioFrameHolder <S16_LE, SAMPLE_RATE, MONO>
+    AudioFrameHolder <S16_LE, SAMPLERATE, MONO>
     aFh;    
-
+    
     // Needed for the ADTS_AAC encoder (it accepts only FLOAT_PLANAR fmt)
-    FFMPEGAudioConverter <S16_LE, SAMPLE_RATE, MONO, FLOAT_PLANAR, SAMPLE_RATE, STEREO>
+    FFMPEGAudioConverter <S16_LE, SAMPLERATE, MONO, FLOAT_PLANAR, SAMPLERATE, STEREO>
     aConv;
 
-    FFMPEGMP2Encoder <S16_LE, SAMPLE_RATE, MONO>
+    FFMPEGMP2Encoder <S16_LE, SAMPLERATE, MONO>
     aEnc_1;    
     
-    FFMPEGADTSAACEncoder <SAMPLE_RATE, STEREO>
+    FFMPEGADTSAACEncoder <SAMPLERATE, STEREO>
     aEnc_2;
     
-    HTTPAudioStreamer <MATROSKA, MP2, SAMPLE_RATE, MONO>
-    aStream_1(eventsCatcher, addr, 8080);    
+    HTTPAudioStreamer <MATROSKA, MP2, SAMPLERATE, MONO>
+    aStream_1(eventsCatcher, addr, 8080, aEnc_1);    
 
-    HTTPAudioStreamer <MPEGTS, ADTS_AAC, SAMPLE_RATE, STEREO>
+    HTTPAudioStreamer <MPEGTS, ADTS_AAC, SAMPLERATE, STEREO>
     aStream_2(eventsCatcher, addr, 8081);    
     
-    while (1)
+    while (!LAAVStop)
     {
         aGrab >> aFh;
                  // MP2 sub-pipe

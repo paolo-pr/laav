@@ -29,36 +29,16 @@
  * 
  *   arecord -L
  * 
- * The streams' addresses are:
- *
- *   (MPEGTS - ADTS_AAC)
- *   http://127.0.0.1:8080/stream.ts 
- * 
- *   (MATROSKA - ADTS_AAC)
- *   http://127.0.0.1:8081/stream.mkv 
- * 
- *   (MPEGTS - H264)
- *   http://127.0.0.1:8082/stream.ts 
- * 
- *   (MATROSKA - MJPEG)
- *   http://127.0.0.1:8083/stream.mkv
- *
- *   (MPEGTS - H264 - ADTS_AAC)
- *   http://127.0.0.1:8084/stream.ts
- *
- *   (MATROSKA - MJPEG - ADTS_AAC)
- *   http://127.0.0.1:8085/stream.mkv
+ * The streams' addresses are printed in the output log
  * 
  */
-
-#include "AlsaGrabber.hpp"
-#include "V4L2Grabber.hpp"
-
-#define SAMPLE_RATE 16000
-#define WIDTH 640
-#define HEIGHT 480
+#include "LAAV.hpp"
 
 using namespace laav;
+
+typedef UnsignedConstant<16000> SAMPLERATE;
+typedef UnsignedConstant<640> WIDTH;
+typedef UnsignedConstant<480> HEIGHT;
 
 int main(int argc, char** argv)
 {
@@ -70,31 +50,32 @@ int main(int argc, char** argv)
         
         return 1;
     }    
-    
+ 
+    LAAVLogLevel = 1;
     std::string addr = "127.0.0.1";
     
     SharedEventsCatcher eventsCatcher = EventsManager::createSharedEventsCatcher();
 
-    AlsaGrabber <S16_LE, SAMPLE_RATE, MONO>
-    aGrab(eventsCatcher, argv[1]);
+    AlsaGrabber <S16_LE, SAMPLERATE, MONO>
+    aGrab(eventsCatcher, argv[1], DEFAULT_SAMPLERATE);
 
-    FFMPEGAudioConverter <S16_LE, SAMPLE_RATE, MONO, FLOAT_PLANAR, SAMPLE_RATE, STEREO>
+    FFMPEGAudioConverter <S16_LE, SAMPLERATE, MONO, FLOAT_PLANAR, SAMPLERATE, STEREO>
     aConv;
 
-    FFMPEGADTSAACEncoder <SAMPLE_RATE, STEREO>
+    FFMPEGADTSAACEncoder <SAMPLERATE, STEREO>
     aEnc;
 
-    AudioFrameHolder <ADTS_AAC, SAMPLE_RATE, STEREO>
+    AudioFrameHolder <ADTS_AAC, SAMPLERATE, STEREO>
     aFh;
 
-    HTTPAudioStreamer <MPEGTS, ADTS_AAC, SAMPLE_RATE, STEREO>
+    HTTPAudioStreamer <MPEGTS, ADTS_AAC, SAMPLERATE, STEREO>
     aStream_1(eventsCatcher, addr, 8080);
 
-    HTTPAudioStreamer <MATROSKA, ADTS_AAC, SAMPLE_RATE, STEREO>
-    aStream_2(eventsCatcher, addr, 8081);    
+    HTTPAudioStreamer <MATROSKA, ADTS_AAC, SAMPLERATE, STEREO>
+    aStream_2(eventsCatcher, addr, 8081, aEnc);    
     
     V4L2Grabber <MJPEG, WIDTH, HEIGHT>
-    vGrab(eventsCatcher, argv[2]);
+    vGrab(eventsCatcher, argv[2], DEFAULT_FRAMERATE);
 
     FFMPEGMJPEGDecoder <WIDTH, HEIGHT>
     vDec;
@@ -117,20 +98,20 @@ int main(int argc, char** argv)
     HTTPVideoStreamer <MATROSKA, MJPEG, WIDTH, HEIGHT>
     vStream_2(eventsCatcher, addr, 8083);
 
-    HTTPAudioVideoStreamer <MPEGTS, H264, WIDTH, HEIGHT, ADTS_AAC, SAMPLE_RATE, STEREO>
+    HTTPAudioVideoStreamer <MPEGTS, H264, WIDTH, HEIGHT, ADTS_AAC, SAMPLERATE, STEREO>
     avStream_1(eventsCatcher, addr, 8084);
 
-    HTTPAudioVideoStreamer <MATROSKA, MJPEG, WIDTH, HEIGHT, ADTS_AAC, SAMPLE_RATE, STEREO>
-    avStream_2(eventsCatcher, addr, 8085);
+    HTTPAudioVideoStreamer <MATROSKA, MJPEG, WIDTH, HEIGHT, ADTS_AAC, SAMPLERATE, STEREO>
+    avStream_2(eventsCatcher, addr, 8085, aEnc);
 
-    while (1)
+    while (!LAAVStop)
     {
         aGrab >> aConv >> aEnc >> aFh;
                                   aFh >> aStream_1;
                                   aFh >> aStream_2;
                                   aFh >> avStream_1;
                                   aFh >> avStream_2;
-                                  
+
         vGrab >> vFh_1;
                  // H264 sub-pipe
                  vFh_1 >> vDec >> vConv >> vEnc >> vFh_2;

@@ -4,8 +4,10 @@ deps=`pkg-config --libs libavformat libavcodec libavutil libswresample libswscal
 
 cd $(dirname $0)
 
-g++ -Wall -std=c++11 -g -DLINUX -o AudioVideoExample_1 AudioVideoExample_1.cpp -I ../include $deps
-g++ -Wall -std=c++11 -g -DLINUX -o AudioVideoExample_2 AudioVideoExample_2.cpp -I ../include $deps
-g++ -Wall -std=c++11 -g -DLINUX -o AudioExample AudioExample.cpp -I ../include $deps
-g++ -Wall -std=c++11 -g -DLINUX -o VideoExample_1 VideoExample_1.cpp -I ../include $deps
-g++ -Wall -std=c++11 -g -DLINUX -o VideoExample_2 VideoExample_2.cpp -I ../include $deps
+g++ -Wfatal-errors -Wall -std=c++11 -g -DLINUX -o AudioVideoExample_1.bin AudioVideoExample_1.cpp -I ../include $deps
+g++ -Wfatal-errors -Wall -std=c++11 -g -DLINUX -o AudioVideoExample_2.bin AudioVideoExample_2.cpp -I ../include $deps
+g++ -Wfatal-errors -Wall -std=c++11 -g -DLINUX -o AudioVideoExample_3.bin AudioVideoExample_3.cpp -I ../include $deps
+g++ -Wfatal-errors -Wall -std=c++11 -g -DLINUX -o AudioExample.bin AudioExample.cpp -I ../include $deps
+g++ -Wfatal-errors -Wall -std=c++11 -g -DLINUX -o VideoExample_1.bin VideoExample_1.cpp -I ../include $deps
+g++ -Wfatal-errors -Wall -std=c++11 -g -DLINUX -o VideoExample_2.bin VideoExample_2.cpp -I ../include $deps
+
