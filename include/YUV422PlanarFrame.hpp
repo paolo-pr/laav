@@ -27,7 +27,7 @@ namespace laav
 
 class YUV422_PLANAR {};
 
-template <unsigned int width_, unsigned int height_>
+template <typename width_, typename height_>
 class VideoFrame<YUV422_PLANAR, width_, height_> :
 public VideoFrameBase<width_, height_>,
 public Planar3RawVideoFrame,
@@ -37,7 +37,7 @@ public FormattedRawVideoFrame<unsigned char, unsigned char, unsigned char>
 public:
 
     VideoFrame<YUV422_PLANAR, width_, height_>() :
-        Planar3RawVideoFrame(width_, height_)
+        Planar3RawVideoFrame(width_::value, height_::value)
     {
     }
 
