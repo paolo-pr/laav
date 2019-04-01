@@ -6,15 +6,15 @@ Recording/streaming system MQTT full-compliant. Particularly useful for home-aut
 
 ## HOW IT WORKS
 
-* It creates a video grabber with "Cam1" id.
+* It creates a video grabber with "**Cam1**" id.
 
 * It connects to a MQTT broker and subscribe to two different topics: **topicPrefix_IN** and **topicPrefix_OUT**, where **"topicPrefix"** is passed as argument when launching the application. 
 
-* It creates two H264 encoders, with two different ids: "Cam1-Encoder-HQ" (640x480 resolution) and "Cam1-Encoder-LQ" (320x240 resolution).
+* It creates two H264 encoders, with two different ids: "**Cam1-Encoder-HQ**" (640x480 resolution) and "**Cam1-Encoder-LQ**" (320x240 resolution).
 
 * It creates two HTTP streamers, fed by the two previous encoders.
 
-* It creates two video recorders, fed by the two previous encoders, with "Cam1-Recorder-HQ" and "Cam1-Recorder-LQ" ids.
+* It creates two video recorders, fed by the two previous encoders, with "**Cam1-Recorder-HQ**" and "**Cam1-Recorder-LQ**" ids.
 
 * It listens for MQTT incoming messages on "topicPrefix_IN" topic, executes commands described in the messages and sends their result on the "topicPrefix_OUT" topic. MQTT commands must be in the form:
 
