@@ -1,5 +1,5 @@
 /* 
- * Created (25/04/2017) by Paolo-Pr.
+ * Created (15/03/2019) by Paolo-Pr.
  * This file is part of Live Asynchronous Audio Video Library.
  *
  * Live Asynchronous Audio Video Library is free software: you can redistribute it and/or modify
@@ -17,8 +17,8 @@
  *
  */
 
-#ifndef FFMPEGMP2ENCODER_HPP_INCLUDED
-#define FFMPEGMP2ENCODER_HPP_INCLUDED
+#ifndef FFMPEGOPUSENCODER_HPP_INCLUDED
+#define FFMPEGOPUSENCODER_HPP_INCLUDED
 
 #include "FFMPEGAudioEncoder.hpp"
 #include "UserParams.hpp"
@@ -30,21 +30,34 @@ template <typename PCMSoundFormat,
           typename audioSampleRate,
           typename audioChannels,
           typename... UserParams>
-class FFMPEGMP2Encoder :
-public FFMPEGAudioEncoder<PCMSoundFormat, MP2, audioSampleRate, audioChannels>
+class FFMPEGOpusEncoder :
+public FFMPEGAudioEncoder<PCMSoundFormat, OPUS, audioSampleRate, audioChannels>
 {
 
 public:
 
-    FFMPEGMP2Encoder()
+    FFMPEGOpusEncoder(const std::string& id = "") :
+        FFMPEGAudioEncoder<PCMSoundFormat, OPUS, 
+                           audioSampleRate, audioChannels>(id)
     {
         this->completeEncoderInitialization();
     }
-
-    FFMPEGMP2Encoder(unsigned int bitrate)
+                                                        
+    FFMPEGOpusEncoder(enum OpusApplications application, long compressionLevel, unsigned int bitrate, const std::string& id = "") :
+        FFMPEGAudioEncoder<PCMSoundFormat, OPUS, 
+                           audioSampleRate, audioChannels>(id)    
     {
+
+        if (application != OPUS_DEFAULT_APPLICATION)
+            av_opt_set(this->mAudioEncoderCodecContext->priv_data,
+                       "application", convertToFFMPEGOpusApplication(application), 0);
+        
         if (bitrate != DEFAULT_BITRATE)
-            this->mAudioEncoderCodecContext->bit_rate = bitrate;
+            this->mAudioEncoderCodecContext->bit_rate = bitrate;        
+            
+        if (compressionLevel != OPUS_DEFAULT_COMPRESSION_LEVEL)
+            this->mAudioEncoderCodecContext->compression_level = compressionLevel;
+        
         this->completeEncoderInitialization();
     }
 
@@ -52,4 +65,4 @@ public:
 
 }
 
-#endif // FFMPEGMP2ENCODER_HPP_INCLUDED
+#endif // FFMPEGOPUSENCODER_HPP_INCLUDED

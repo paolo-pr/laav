@@ -27,7 +27,7 @@ namespace laav
 
 class MP2 {};
 
-template <unsigned int audioSampleRate, enum AudioChannels audioChannels>
+template <typename audioSampleRate, typename audioChannels>
 class AudioFrame<MP2, audioSampleRate, audioChannels> :
 public EncodedAudioFrame<MP2>
 {

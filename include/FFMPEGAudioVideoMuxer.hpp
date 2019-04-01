@@ -27,11 +27,11 @@ namespace laav
 
 template <typename Container,
           typename VideoCodecOrFormat,
-          unsigned int width,
-          unsigned int height,
+          typename width,
+          typename height,
           typename AudioCodecOrFormat,
-          unsigned int audioSampleRate,
-          enum AudioChannels audioChannels>
+          typename audioSampleRate,
+          typename audioChannels>
 class FFMPEGAudioVideoMuxer :
 public FFMPEGMuxerVideoImpl<Container, VideoCodecOrFormat, width, height>,
 public FFMPEGMuxerAudioImpl<Container, AudioCodecOrFormat, audioSampleRate, audioChannels>
@@ -39,91 +39,172 @@ public FFMPEGMuxerAudioImpl<Container, AudioCodecOrFormat, audioSampleRate, audi
 
     template <typename Container_,
               typename VideoCodecOrFormat_,
-              unsigned int width_,
-              unsigned int height_,
+              typename width_,
+              typename height_,
               typename AudioCodecOrFormat_,
-              unsigned int audioSampleRate_,
-              enum AudioChannels audioChannels_>
+              typename audioSampleRate_,
+              typename audioChannels_>
    friend class HTTPAudioVideoStreamer;
 
     template <typename Container_,
               typename VideoCodecOrFormat_,
-              unsigned int width_,
-              unsigned int height_,
+              typename width_,
+              typename height_,
               typename AudioCodecOrFormat_,
-              unsigned int audioSampleRate_,
-              enum AudioChannels audioChannels_>
+              typename audioSampleRate_,
+              typename audioChannels_>
    friend class UDPAudioVideoStreamer;
    
 public:
 
-    FFMPEGAudioVideoMuxer(bool startMuxingSoon = false) :
+    //TODO group all the ctors with a forwarder func
+    
+    FFMPEGAudioVideoMuxer(const std::string& id = "") :
         FFMPEGMuxerVideoImpl<Container, VideoCodecOrFormat,
-                             width, height>(startMuxingSoon),
+                             width, height>(id),
         FFMPEGMuxerAudioImpl<Container, AudioCodecOrFormat,
-                             audioSampleRate, audioChannels>(startMuxingSoon)
+                             audioSampleRate, audioChannels>(id)
     {
-        this->mMuxAudio = true;
-        this->mMuxVideo = true;
-        FFMPEGMuxerCommonImpl<Container>::completeMuxerInitialization();
-        auto freeNothing = [](unsigned char* buffer) {  };
-
-        mMuxedAudioVideoChunks.resize(this->mMuxedChunks.data.size());
-        unsigned int n;
-        for (n = 0; n < mMuxedAudioVideoChunks.size(); n++)
-        {
-            ShareableMuxedData shMuxedData(this->mMuxedChunks.data[n].ptr, freeNothing);
-            mMuxedAudioVideoChunks[n].assignDataSharedPtr(shMuxedData);
-        }
+        static_assert(! (std::is_same<Container, MATROSKA>::value && std::is_same<VideoCodecOrFormat, H264>::value), 
+                      "Please pass the H264 encoder to the constructor!"); 
+        
+        static_assert(! (std::is_same<Container, MATROSKA>::value), 
+                      "Please pass the audio encoder to the constructor!");         
+        
+        FFMPEGMuxerAudioImpl<Container, AudioCodecOrFormat, audioSampleRate, audioChannels>::setParamsFromEmbeddedAudioCodecContext();
+        FFMPEGMuxerVideoImpl<Container, VideoCodecOrFormat, width, height>::setParamsFromEmbeddedVideoCodecContext();
+        ctorCommon();
     }
 
+    template <typename RawVideoFrameFormat>
+    FFMPEGAudioVideoMuxer(const FFMPEGVideoEncoder<RawVideoFrameFormat, VideoCodecOrFormat, width, height>& vEnc, 
+                          const std::string& id = "") :
+        FFMPEGMuxerVideoImpl<Container, VideoCodecOrFormat,
+                             width, height>(id),
+        FFMPEGMuxerAudioImpl<Container, AudioCodecOrFormat,
+                             audioSampleRate, audioChannels>(id)
+    {
+
+        static_assert(! (std::is_same<Container, MATROSKA>::value), 
+                      "Please pass the audio encoder to the constructor, as needed by MATROSKA muxer!");         
+        
+        // they will be freed by the avformat cleanup stuff
+        avcodec_parameters_from_context(FFMPEGMuxerVideoImpl<Container, VideoCodecOrFormat, width, height>::mVideoStream->codecpar, vEnc.mVideoEncoderCodecContextOutOfBand); 
+        FFMPEGMuxerAudioImpl<Container, AudioCodecOrFormat, audioSampleRate, audioChannels>::setParamsFromEmbeddedAudioCodecContext();
+        ctorCommon();
+    }    
+    
+    template <typename PCMSoundFormat>  
+    FFMPEGAudioVideoMuxer(const FFMPEGAudioEncoder<PCMSoundFormat, AudioCodecOrFormat, audioSampleRate, audioChannels>& aEnc,
+                          const std::string& id = "") :
+    FFMPEGMuxerVideoImpl<Container, VideoCodecOrFormat,
+                         width, height>(id),
+    FFMPEGMuxerAudioImpl<Container, AudioCodecOrFormat,
+                         audioSampleRate, audioChannels>(id)
+    {
+        static_assert(! (std::is_same<Container, MATROSKA>::value && std::is_same<VideoCodecOrFormat, H264>::value), 
+                      "Please pass the H264 encoder to the constructor, as needed by MATROSKA muxer!");
+        
+        avcodec_parameters_from_context(FFMPEGMuxerAudioImpl<Container, AudioCodecOrFormat, audioSampleRate, audioChannels>::mAudioStream->codecpar, 
+                                        aEnc.mAudioEncoderCodecContext);
+        FFMPEGMuxerVideoImpl<Container, VideoCodecOrFormat, width, height>::setParamsFromEmbeddedVideoCodecContext();
+        ctorCommon();
+    }    
+    
+    template <typename PCMSoundFormat, typename RawVideoFrameFormat>  
+    FFMPEGAudioVideoMuxer(const FFMPEGAudioEncoder<PCMSoundFormat, AudioCodecOrFormat, audioSampleRate, audioChannels>& aEnc,
+                          const FFMPEGVideoEncoder<RawVideoFrameFormat, VideoCodecOrFormat, width, height>& vEnc,
+                          const std::string& id = "") :
+    FFMPEGMuxerVideoImpl<Container, VideoCodecOrFormat,
+                         width, height>(id),
+    FFMPEGMuxerAudioImpl<Container, AudioCodecOrFormat,
+                         audioSampleRate, audioChannels>(id)
+    {
+        avcodec_parameters_from_context(FFMPEGMuxerAudioImpl<Container, AudioCodecOrFormat, audioSampleRate, audioChannels>::mAudioStream->codecpar, 
+                                        aEnc.mAudioEncoderCodecContext);
+        avcodec_parameters_from_context(FFMPEGMuxerVideoImpl<Container, VideoCodecOrFormat, width, height>::mVideoStream->codecpar, vEnc.mVideoEncoderCodecContextOutOfBand);     
+        ctorCommon();
+    }    
+    
     /*!
-     *  \exception MediaException(MEDIA_NO_DATA)
+     *  \exception MediumException
      */
     const std::vector<MuxedAudioVideoData<Container, VideoCodecOrFormat, width, height,
                                           AudioCodecOrFormat, audioSampleRate, audioChannels> >&
     muxedAudioVideoChunks()
     {
-        if (this->mMuxedChunks.newGroupOfChunks)
+        if (Medium::mInputStatus == PAUSED)
+            throw MediumException(MEDIUM_PAUSED);        
+
+        if (Medium::mStatusInPipe ==  NOT_READY)
+            throw MediumException(PIPE_NOT_READY);        
+        
+        if (this->mMuxedChunksHelper.newGroupOfChunks)
         {
             unsigned int n;
-            for (n = 0; n < this->mMuxedChunks.offset; n++)
+            for (n = 0; n < this->mMuxedChunksHelper.offset; n++)
             {
-                mMuxedAudioVideoChunks[n].setSize(this->mMuxedChunks.data[n].size);
+                mMuxedAudioVideoChunks[n].setSize(this->mMuxedChunksHelper.data[n].size);
             }
+            Medium::mOutputStatus  = READY;            
             return mMuxedAudioVideoChunks;
         }
         else
         {
-            throw MediaException(MEDIA_NO_DATA);
+            Medium::mOutputStatus  = NOT_READY;            
+            throw MediumException(OUTPUT_NOT_READY);
         }
     }
 
     unsigned int muxedAudioVideoChunksOffset() const
     {
-        return this->mMuxedChunks.offset;
+        return this->mMuxedChunksHelper.offset;
     }
 
-    void takeMuxableFrame(const AudioFrame<AudioCodecOrFormat,
+    /*!
+     *  \exception MediumException
+     */
+    void mux(const AudioFrame<AudioCodecOrFormat,
                           audioSampleRate, audioChannels>& audioFrameToMux)
     {
         FFMPEGMuxerAudioImpl<Container, AudioCodecOrFormat,
-                             audioSampleRate, audioChannels>::takeMuxableFrame(audioFrameToMux);
+                             audioSampleRate, audioChannels>::mux(audioFrameToMux);
     }
 
-    void takeMuxableFrame(const VideoFrame<VideoCodecOrFormat, width, height>& videoFrameToMux)
-    {
+    /*!
+     *  \exception MediumException
+     */    
+    void mux(const VideoFrame<VideoCodecOrFormat, width, height>& videoFrameToMux)
+    {     
         FFMPEGMuxerVideoImpl<Container, VideoCodecOrFormat,
-                             width, height>::takeMuxableFrame(videoFrameToMux);
-    }
-
+                             width, height>::mux(videoFrameToMux);
+    }    
+    
+    
 private:
 
     std::vector<MuxedAudioVideoData<Container, VideoCodecOrFormat,
                                     width, height,
                                     AudioCodecOrFormat, audioSampleRate,
                                     audioChannels> > mMuxedAudioVideoChunks;
+                                    
+    void ctorCommon()
+    {
+        this->mMuxAudio = true;
+        this->mMuxVideo = true;
+        FFMPEGMuxerCommonImpl<Container>::mMuxedChunksHelper.needsVideoKeyFrame = true; 
+        FFMPEGMuxerCommonImpl<Container>::completeMuxerInitialization();
+        auto freeNothing = [](unsigned char* buffer) {  };
 
+        mMuxedAudioVideoChunks.resize(this->mMuxedChunksHelper.data.size());
+        unsigned int n;
+        for (n = 0; n < mMuxedAudioVideoChunks.size(); n++)
+        {
+            ShareableMuxedData shMuxedData(this->mMuxedChunksHelper.data[n].ptr, freeNothing);
+            mMuxedAudioVideoChunks[n].assignDataSharedPtr(shMuxedData);
+        }
+        Medium::mInputStatus = READY;
+    }
 };
 
 }

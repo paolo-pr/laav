@@ -1,5 +1,5 @@
 /* 
- * Created (25/04/2017) by Paolo-Pr.
+ * Created (25/02/2018) by Paolo-Pr.
  * This file is part of Live Asynchronous Audio Video Library.
  *
  * Live Asynchronous Audio Video Library is free software: you can redistribute it and/or modify
@@ -14,24 +14,20 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Live Asynchronous Audio Video Library.  If not, see <http://www.gnu.org/licenses/>.
- *
  */
 
-#ifndef SIGNED16PACKEDFRAME_HPP_INCLUDED
-#define SIGNED16PACKEDFRAME_HPP_INCLUDED
+#ifndef LAAV_HPP_INCLUDED
+#define LAAV_HPP_INCLUDED
 
-#include "Frame.hpp"
+#include "AlsaGrabber.hpp"
+#include "V4L2Grabber.hpp"
+#include "MediaManager.hpp"
+#include "HTTPCommandsReceiver.hpp"
+#include "HTTPAudioVideoStreamer.hpp"
+#include "HTTPVideoStreamer.hpp"
+#include "HTTPAudioStreamer.hpp"
+#include "UDPAudioVideoStreamer.hpp"
+#include "UDPVideoStreamer.hpp"
+#include "UDPAudioStreamer.hpp"
 
-namespace laav
-{
-
-class S16_LE {};
-
-template <typename audioSampleRate, typename audioChannels>
-class AudioFrame<S16_LE, audioSampleRate, audioChannels> : public FrameBase, public PackedRawAudioFrame
-{
-};
-
-}
-
-#endif // SIGNED16PACKEDFRAME_HPP_INCLUDED
+#endif

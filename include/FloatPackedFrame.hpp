@@ -25,9 +25,9 @@ namespace laav
 
 class FLOAT_PACKED {};
 
-template <unsigned int audioSampleRate, enum AudioChannels audioChannels>
+template <typename audioSampleRate, typename audioChannels>
 class AudioFrame<FLOAT_PACKED, audioSampleRate, audioChannels > :
-public Frame, public PackedRawAudioFrame
+public FrameBase, public PackedRawAudioFrame
 {
 };
 

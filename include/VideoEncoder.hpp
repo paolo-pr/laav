@@ -20,67 +20,105 @@
 #ifndef VIDEOENCODER_HPP_INCLUDED
 #define VIDEOENCODER_HPP_INCLUDED
 
-#include "HTTPAudioVideoStreamer.hpp"
-#include "HTTPVideoStreamer.hpp"
-#include "UDPAudioVideoStreamer.hpp"
-#include "UDPVideoStreamer.hpp"
-
 namespace laav
 {
-
+    
 template <typename EncodedVideoFrameCodec,
-          unsigned int width,
-          unsigned int height>
+          typename width,
+          typename height>
 class VideoFrameHolder;
+
+template <typename Container,
+          typename VideoCodecOrFormat,
+          typename width,
+          typename height>
+class HTTPVideoStreamer;    
+
+template <typename Container,
+          typename VideoCodecOrFormat,
+          typename width,
+          typename height>
+class FFMPEGVideoMuxer;
+
+template <typename Container,
+          typename VideoCodecOrFormat,
+          typename width,
+          typename height>
+class UDPVideoStreamer;
+
+template <typename Container,
+          typename VideoCodecOrFormat,
+          typename width,
+          typename height,
+          typename AudioCodec,
+          typename audioSampleRate,
+          typename audioChannels>
+class HTTPAudioVideoStreamer;
+
+template <typename Container,
+          typename VideoCodecOrFormat,
+          typename width,
+          typename height,
+          typename AudioCodec,
+          typename audioSampleRate,
+          typename audioChannels>
+class FFMPEGAudioVideoMuxer;
+
+template <typename Container,
+          typename VideoCodecOrFormat,
+          typename width,
+          typename height,
+          typename AudioCodec,
+          typename audioSampleRate,
+          typename audioChannels>
+class UDPAudioVideoStreamer;
 
 template <typename RawVideoFrameFormat,
           typename EncodedVideoFrameCodec,
-          unsigned int width,
-          unsigned int height>
-class VideoEncoder
+          typename width,
+          typename height>
+class VideoEncoder : public Medium
 {
 
 public:
 
-    VideoEncoder():
-        mMediaStatusInPipe(MEDIA_NOT_READY),
+    VideoEncoder(const std::string& id = ""):
+        Medium(id),
         mEncodingStartTime(0),
         mFillingEncodedVideoFrameBuffer(true),
-        mEncodedVideoFrameBufferOffset(0)
+        mEncodedVideoFrameBufferOffset(0),
+        mNeedsToBuffer(false)
     {
         unsigned int i;
         for (i = 0; i < encodedVideoFrameBufferSize; i++)
         {
             mEncodedVideoFrameBuffer.push_back(VideoFrame<EncodedVideoFrameCodec, width, height>());
         }
+        Medium::mInputStatus = READY;        
     }
 
     VideoFrameHolder<EncodedVideoFrameCodec, width, height>&
     operator >>
     (VideoFrameHolder<EncodedVideoFrameCodec, width, height>& videoFrameHolder)
     {
-        if (mMediaStatusInPipe == MEDIA_READY)
-            videoFrameHolder.mMediaStatusInPipe = MEDIA_READY;
-        else
-        {
-            videoFrameHolder.mMediaStatusInPipe = mMediaStatusInPipe;
-            mMediaStatusInPipe = MEDIA_READY;
-            return videoFrameHolder;
-        }
+        Medium& m = videoFrameHolder;
+        setDistanceFromInputVideoFrameFactory(m, 1);        
+        setInputVideoFrameFactoryId(m, mId);
+        setStatusInPipe(m, READY); 
+        
         try
         {
-            videoFrameHolder.hold(lastEncodedFrame());
-            videoFrameHolder.mMediaStatusInPipe = MEDIA_READY;
+            videoFrameHolder.hold(lastEncodedFrame());          
         }
-        catch (const MediaException& mediaException)
+        catch (const MediumException& mediumException)
         {
-            videoFrameHolder.mMediaStatusInPipe = mediaException.cause();
+            setStatusInPipe(m, NOT_READY);            
         }
         return videoFrameHolder;
     }
 
     template <typename Container, typename AudioCodec,
-              unsigned int audioSampleRate, enum AudioChannels audioChannels>
+              typename audioSampleRate, typename audioChannels>
     FFMPEGAudioVideoMuxer<Container,
                           EncodedVideoFrameCodec, width, height,
                           AudioCodec, audioSampleRate, audioChannels>&
@@ -89,22 +127,18 @@ public:
                            EncodedVideoFrameCodec, width, height,
                            AudioCodec, audioSampleRate, audioChannels>& audioVideoMuxer)
     {
-        if (mMediaStatusInPipe == MEDIA_READY)
-            audioVideoMuxer.mMediaStatusInPipe = MEDIA_READY;
-        else
-        {
-            audioVideoMuxer.mMediaStatusInPipe = mMediaStatusInPipe;
-            mMediaStatusInPipe = MEDIA_READY;
-            return audioVideoMuxer;
-        }
-
+        Medium& m = audioVideoMuxer;
+        setDistanceFromInputVideoFrameFactory(m, 1);        
+        setInputVideoFrameFactoryId(m, mId);           
+        setStatusInPipe(m, READY); 
+        
         try
         {
-            audioVideoMuxer.takeMuxableFrame(lastEncodedFrame());
+            audioVideoMuxer.mux(lastEncodedFrame());            
         }
-        catch (const MediaException& mediaException)
+        catch (const MediumException& mediumException)
         {
-            audioVideoMuxer.mMediaStatusInPipe = mediaException.cause();
+            setStatusInPipe(m, NOT_READY);            
         }
         return audioVideoMuxer;
     }
@@ -114,19 +148,24 @@ public:
     operator >>
     (FFMPEGVideoMuxer<Container, EncodedVideoFrameCodec, width, height>& videoMuxer)
     {
+        Medium& m = videoMuxer;
+        setDistanceFromInputVideoFrameFactory(m, 1);        
+        setInputVideoFrameFactoryId(m, mId);
+        setStatusInPipe(m, READY); 
+    
         try
         {
-            videoMuxer.takeMuxableFrame(lastEncodedFrame());
+            videoMuxer.mux(lastEncodedFrame());       
         }
-        catch (const MediaException& mediaException)
+        catch (const MediumException& mediumException)
         {
-            // DO nothing (end of pipe)
+            setStatusInPipe(m, NOT_READY);            
         }
         return videoMuxer;
     }
 
     template <typename Container, typename AudioCodec,
-              unsigned int audioSampleRate, enum AudioChannels audioChannels>
+              typename audioSampleRate, typename audioChannels>
     HTTPAudioVideoStreamer<Container,
                            EncodedVideoFrameCodec, width, height,
                            AudioCodec, audioSampleRate, audioChannels>&
@@ -135,22 +174,19 @@ public:
                             EncodedVideoFrameCodec, width, height,
                             AudioCodec, audioSampleRate, audioChannels>& httpAudioVideoStreamer)
     {
-        if (mMediaStatusInPipe != MEDIA_READY)
+        Medium& m = httpAudioVideoStreamer;
+        setDistanceFromInputVideoFrameFactory(m, 1);        
+        setInputVideoFrameFactoryId(m, mId);
+        setStatusInPipe(m, READY); 
+        
+        try
         {
-            mMediaStatusInPipe = MEDIA_READY;
-            return httpAudioVideoStreamer;
+            httpAudioVideoStreamer.takeStreamableFrame(lastEncodedFrame());
+            httpAudioVideoStreamer.streamMuxedData();            
         }
-        else
+        catch (const MediumException& mediumException)
         {
-            try
-            {
-                httpAudioVideoStreamer.takeStreamableFrame(lastEncodedFrame());
-                httpAudioVideoStreamer.streamMuxedData();
-            }
-            catch (const MediaException& mediaException)
-            {
-                // Do nothing, because the streamer is at the end of the pipe
-            }
+            setStatusInPipe(m, NOT_READY);            
         }
 
         return httpAudioVideoStreamer;
@@ -161,29 +197,26 @@ public:
     operator >>
     (HTTPVideoStreamer<Container, EncodedVideoFrameCodec, width, height>& httpVideoStreamer)
     {
-        if (mMediaStatusInPipe != MEDIA_READY)
+        Medium& m = httpVideoStreamer;
+        setDistanceFromInputVideoFrameFactory(m, 1);        
+        setInputVideoFrameFactoryId(m, mId);
+        setStatusInPipe(m, READY); 
+        
+        try
         {
-            mMediaStatusInPipe = MEDIA_READY;
-            return httpVideoStreamer;
+            httpVideoStreamer.takeStreamableFrame(lastEncodedFrame());
+            httpVideoStreamer.streamMuxedData();           
         }
-        else
+        catch (const MediumException& mediumException)
         {
-            try
-            {
-                httpVideoStreamer.takeStreamableFrame(lastEncodedFrame());
-                httpVideoStreamer.streamMuxedData();
-            }
-            catch (const MediaException& mediaException)
-            {
-                // Do nothing, because the streamer is at the end of the pipe
-            }
+            setStatusInPipe(m, NOT_READY);            
         }
 
         return httpVideoStreamer;
     }
 
     template <typename Container, typename AudioCodec,
-              unsigned int audioSampleRate, enum AudioChannels audioChannels>
+              typename audioSampleRate, typename audioChannels>
     UDPAudioVideoStreamer<Container,
                           EncodedVideoFrameCodec, width, height,
                           AudioCodec, audioSampleRate, audioChannels>&
@@ -192,22 +225,19 @@ public:
                            EncodedVideoFrameCodec, width, height,
                            AudioCodec, audioSampleRate, audioChannels>& udpAudioVideoStreamer)
     {
-        if (mMediaStatusInPipe != MEDIA_READY)
+        Medium& m = udpAudioVideoStreamer;
+        setDistanceFromInputVideoFrameFactory(m, 1);        
+        setInputVideoFrameFactoryId(m, mId);        
+        setStatusInPipe(m, READY); 
+        
+        try
         {
-            mMediaStatusInPipe = MEDIA_READY;
-            return udpAudioVideoStreamer;
+            udpAudioVideoStreamer.takeStreamableFrame(lastEncodedFrame());
+            udpAudioVideoStreamer.streamMuxedData();           
         }
-        else
+        catch (const MediumException& mediumException)
         {
-            try
-            {
-                udpAudioVideoStreamer.takeStreamableFrame(lastEncodedFrame());
-                udpAudioVideoStreamer.streamMuxedData();
-            }
-            catch (const MediaException& mediaException)
-            {
-                // Do nothing, because the streamer is at the end of the pipe
-            }
+            setStatusInPipe(m, NOT_READY);
         }
 
         return udpAudioVideoStreamer;
@@ -218,35 +248,42 @@ public:
     operator >>
     (UDPVideoStreamer<Container, EncodedVideoFrameCodec, width, height>& udpVideoStreamer)
     {
-        if (mMediaStatusInPipe != MEDIA_READY)
+        Medium& m = udpVideoStreamer;
+        setDistanceFromInputVideoFrameFactory(m, 1);        
+        setInputVideoFrameFactoryId(m, mId);         
+        setStatusInPipe(m, READY); 
+        
+        try
         {
-            mMediaStatusInPipe = MEDIA_READY;
-            return udpVideoStreamer;
+            udpVideoStreamer.takeStreamableFrame(lastEncodedFrame());
+            udpVideoStreamer.streamMuxedData();            
         }
-        else
+        catch (const MediumException& mediumException)
         {
-            try
-            {
-                udpVideoStreamer.takeStreamableFrame(lastEncodedFrame());
-                udpVideoStreamer.streamMuxedData();
-            }
-            catch (const MediaException& mediaException)
-            {
-                // Do nothing, because the streamer is at the end of the pipe
-            }
+            setStatusInPipe(m, NOT_READY);
         }
 
         return udpVideoStreamer;
     }
     
     /*!
-     *  \exception MediaException(MEDIA_NO_DATA)
+     *  \exception MediumException
      */
     VideoFrame<EncodedVideoFrameCodec, width, height>& encodedFrame(unsigned int bufferOffset)
     {
-        if ( mFillingEncodedVideoFrameBuffer &&
-             (bufferOffset % mEncodedVideoFrameBuffer.size() >= mEncodedVideoFrameBufferOffset) )
-            throw MediaException(MEDIA_NO_DATA);
+        if (Medium::mStatusInPipe ==  NOT_READY)
+            throw MediumException(PIPE_NOT_READY);
+        
+        if (Medium::mInputStatus ==  PAUSED)
+            throw MediumException(MEDIUM_PAUSED);        
+        
+        if (mFillingEncodedVideoFrameBuffer &&
+            (bufferOffset % mEncodedVideoFrameBuffer.size() >= mEncodedVideoFrameBufferOffset) )
+            throw MediumException(MEDIUM_BUFFERING);
+        
+        if (mNeedsToBuffer)
+            throw MediumException(MEDIUM_BUFFERING);
+        
         else
         {
             return mEncodedVideoFrameBuffer[bufferOffset % mEncodedVideoFrameBuffer.size()];
@@ -254,7 +291,7 @@ public:
     }
 
     /*!
-     *  \exception MediaException(MEDIA_NO_DATA)
+     *  \exception MediumException
      */
     VideoFrame<EncodedVideoFrameCodec, width, height>& lastEncodedFrame()
     {
@@ -274,18 +311,20 @@ public:
         return mEncodedVideoFrameBuffer.size();
     }
 
-    // TODO: private with friends...
-    enum MediaStatus mMediaStatusInPipe;
-
     virtual void encode(const VideoFrame<RawVideoFrameFormat, width, height>& rawVideoFrame) = 0;
 
 protected:
 
+    virtual void beforeEncodeCallback(){}
+    
+    virtual void afterEncodeCallback(){}    
+    
     int64_t mEncodingStartTime;
     bool mFillingEncodedVideoFrameBuffer;
+    //TODO: should it be mutable, with const getting functions?
     std::vector<VideoFrame<EncodedVideoFrameCodec, width, height> > mEncodedVideoFrameBuffer;
     unsigned int mEncodedVideoFrameBufferOffset;
-
+    bool mNeedsToBuffer;
 };
 
 }

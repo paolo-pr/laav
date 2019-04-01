@@ -26,7 +26,7 @@ namespace laav
 
 class ADTS_AAC {};
 
-template <unsigned int audioSampleRate, enum AudioChannels audioChannels>
+template <typename audioSampleRate, typename audioChannels>
 class AudioFrame<ADTS_AAC, audioSampleRate, audioChannels> : public EncodedAudioFrame<ADTS_AAC> {};
 
 }

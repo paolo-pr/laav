@@ -36,33 +36,66 @@ namespace laav
 
 template <typename RawVideoFrameFormat,
           typename EncodedVideoFrameCodec,
-          unsigned int width,
-          unsigned int height>
-class FFMPEGVideoEncoder : public VideoEncoder<RawVideoFrameFormat, H264, width, height>
+          typename width,
+          typename height>
+class FFMPEGVideoEncoder : public VideoEncoder<RawVideoFrameFormat, EncodedVideoFrameCodec, width, height>
 {
+
+// accesses the mVideoCodecContext member for copying the parameters needed by some formats (i.e: matroska)
+template <typename Container, typename VideoCodecOrFormat,
+          typename width_, typename height_>
+friend class FFMPEGVideoMuxer;    
+
+template <typename Container, typename VideoCodecOrFormat,
+          typename width_, typename height_,
+          typename AudioCodecOrFormat,
+          typename audioSampleRate, typename audioChannels>
+friend class FFMPEGAudioVideoMuxer;
 
 public:
 
     /*!
-     *  \exception MediaException(MEDIA_NO_DATA)
+     *  \exception MediumException
      */
     void encode(const VideoFrame<RawVideoFrameFormat, width, height>& inputRawVideoFrame)
     {
-        fillLibAVFrame(inputRawVideoFrame);
+
+        if (inputRawVideoFrame.isEmpty())
+            throw MediumException(INPUT_EMPTY);
+
+        Medium::mInputVideoFrameFactoryId = inputRawVideoFrame.mFactoryId;
+        Medium::mDistanceFromInputVideoFrameFactory = inputRawVideoFrame.mDistanceFromFactory + 1;        
+
+        if (Medium::mStatusInPipe ==  NOT_READY)
+            throw MediumException(PIPE_NOT_READY);  
+        
+        if (Medium::mInputStatus == PAUSED)
+            throw MediumException(MEDIUM_PAUSED);
+        
+        this->beforeEncodeCallback();
+        fillLibAVFrame(inputRawVideoFrame);       
         this->doEncode();
+        this->afterEncodeCallback();
     }
 
+    void generateKeyFrame()
+    {
+        mGenerateKeyFrame = true;
+    }
+    
     // TODO: implement for packed and planar2
     // void fillLibAVFrame(const PackedRawVideoFrameBase& inputRawVideoFrame);
 
 protected:
 
-    FFMPEGVideoEncoder() :
-        mLatency(0),
+    FFMPEGVideoEncoder(const std::string& id = ""):
+        VideoEncoder<RawVideoFrameFormat, EncodedVideoFrameCodec, width, height>(id),
+        mGenerateKeyFrame(false),
+        mLatency(0),       
         mInternalPtsBufferOffset(0)
     {
-        avcodec_register_all();
-
+        //avcodec_register_all();
+        VideoEncoder<RawVideoFrameFormat, EncodedVideoFrameCodec, width, height>::mNeedsToBuffer = true;
         mVideoCodec = avcodec_find_encoder(FFMPEGUtils::translateCodec<EncodedVideoFrameCodec>());
         if (!mVideoCodec)
             printAndThrowUnrecoverableError("mVideoCodec = avcodec_find_encoder(...)");
@@ -74,14 +107,30 @@ protected:
         mVideoEncoderCodecContext->codec_id =
         FFMPEGUtils::translateCodec<EncodedVideoFrameCodec>();
 
-        mVideoEncoderCodecContext->width = width;
-        mVideoEncoderCodecContext->height = height;
+        mVideoEncoderCodecContext->width = width::value;
+        mVideoEncoderCodecContext->height = height::value;
         mVideoEncoderCodecContext->time_base = AV_TIME_BASE_Q;
-        mVideoEncoderCodecContext->max_b_frames = 0;
-
+        mVideoEncoderCodecContext->max_b_frames = 0;    
         mVideoEncoderCodecContext->pix_fmt =
         FFMPEGUtils::translatePixelFormat<RawVideoFrameFormat>();
 
+        
+        mVideoEncoderCodecContextOutOfBand = avcodec_alloc_context3(mVideoCodec);
+        if (!mVideoEncoderCodecContextOutOfBand)
+            printAndThrowUnrecoverableError("mVideoEncoderCodecContextOutOfBand = avcodec_alloc_context3(...)");
+
+        mVideoEncoderCodecContextOutOfBand->codec_id =
+        FFMPEGUtils::translateCodec<EncodedVideoFrameCodec>();
+
+        mVideoEncoderCodecContextOutOfBand->width = width::value;
+        mVideoEncoderCodecContextOutOfBand->height = height::value;
+        mVideoEncoderCodecContextOutOfBand->time_base = AV_TIME_BASE_Q;
+        mVideoEncoderCodecContextOutOfBand->max_b_frames = 0;
+        mVideoEncoderCodecContextOutOfBand->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;        
+        mVideoEncoderCodecContextOutOfBand->pix_fmt =
+        FFMPEGUtils::translatePixelFormat<RawVideoFrameFormat>();
+        
+        
         mInputLibAVFrame = av_frame_alloc();
         if (!mInputLibAVFrame)
             printAndThrowUnrecoverableError("mInputLibAVFrame = av_frame_alloc()");
@@ -124,6 +173,8 @@ protected:
     {
         if (avcodec_open2(mVideoEncoderCodecContext, mVideoCodec, NULL) < 0)
             printAndThrowUnrecoverableError("avcodec_open2(...)");
+        if (avcodec_open2(mVideoEncoderCodecContextOutOfBand, mVideoCodec, NULL) < 0)
+            printAndThrowUnrecoverableError("avcodec_open2(...)");        
     }
 
     ~FFMPEGVideoEncoder()
@@ -133,24 +184,27 @@ protected:
             av_packet_unref(&mEncodedVideoPktBuffer[q]);
         av_frame_free(&mInputLibAVFrame);
         avcodec_free_context(&mVideoEncoderCodecContext);
+        avcodec_free_context(&mVideoEncoderCodecContextOutOfBand);
     }
 
     AVCodecContext* mVideoEncoderCodecContext;
-
+    AVCodecContext* mVideoEncoderCodecContextOutOfBand;
+    
 private:
 
     AVCodec* mVideoCodec;
     AVFrame* mInputLibAVFrame;
     std::vector<AVPacket> mEncodedVideoPktBuffer;
+    bool mGenerateKeyFrame;
 
     /*!
-     *  \exception MediaException(MEDIA_NO_DATA)
+     *  \exception MediumException
      */
     void fillLibAVFrame(const Planar3RawVideoFrame& inputRawVideoFrame)
     {
-        if (inputRawVideoFrame.size<0>() == 0)
+        if (inputRawVideoFrame.isEmpty())
         {
-            throw MediaException(MEDIA_NO_DATA);
+            throw MediumException(INPUT_EMPTY);
         }
         this->mInputLibAVFrame->data[0] = (uint8_t* )inputRawVideoFrame.plane<0>();
         this->mInputLibAVFrame->data[1] = (uint8_t* )inputRawVideoFrame.plane<1>();
@@ -166,13 +220,21 @@ private:
         AVPacket& currEncodedVideoPkt =
         this->mEncodedVideoPktBuffer[this->mEncodedVideoFrameBufferOffset];
 
-        VideoFrame<H264, width, height>& currEncodedVideoFrame =
+        VideoFrame<EncodedVideoFrameCodec, width, height>& currEncodedVideoFrame =
         this->mEncodedVideoFrameBuffer[this->mEncodedVideoFrameBufferOffset];
 
         av_packet_unref(&currEncodedVideoPkt);
 
         int64_t nowPts = av_gettime_relative();
         this->mInputLibAVFrame->pts = nowPts;
+        
+        if(mGenerateKeyFrame)
+        {
+            this->mInputLibAVFrame->pict_type = AV_PICTURE_TYPE_I;
+            mGenerateKeyFrame = false;
+        }
+        
+        
         int ret = avcodec_send_frame(this->mVideoEncoderCodecContext, this->mInputLibAVFrame);
         if (ret == AVERROR(EAGAIN))
         {
@@ -186,7 +248,6 @@ private:
             ;
         else if (ret != 0)
             printAndThrowUnrecoverableError("avcodec_receive_packet(...)");
-
         this->mInternalMonotonicPtsBuffer[this->mInternalPtsBufferOffset] = nowPts;
         struct timespec dateTimeNow;
         // TODO ifdef linux
@@ -196,7 +257,8 @@ private:
 
         if (ret == 0)
         {
-
+            VideoEncoder<RawVideoFrameFormat, EncodedVideoFrameCodec, width, height>::mNeedsToBuffer = false;
+            Medium::mOutputStatus = READY;
             if (mLatency == 0)
             {
                 mLatency = av_gettime_relative() - this->mEncodingStartTime;
@@ -209,13 +271,16 @@ private:
             currEncodedVideoFrame.assignDataSharedPtr(mVideoData);
             currEncodedVideoFrame.setSize(currEncodedVideoPkt.size);
             currEncodedVideoFrame.mLibAVFlags = currEncodedVideoPkt.flags;
+            currEncodedVideoFrame.mAVCodecContext = mVideoEncoderCodecContext;
             currEncodedVideoFrame.mLibAVSideData = currEncodedVideoPkt.side_data;
             currEncodedVideoFrame.mLibAVSideDataElems = currEncodedVideoPkt.side_data_elems;
             int64_t monoPts = this->mInternalMonotonicPtsBuffer[this->mEncodedVideoFrameBufferOffset];
             int64_t datePts = this->mInternalDatePtsBuffer[this->mEncodedVideoFrameBufferOffset];
             currEncodedVideoFrame.setMonotonicTimestamp(monoPts);
             currEncodedVideoFrame.setDateTimestamp(datePts);
-
+            currEncodedVideoFrame.mFactoryId = Medium::mId;
+            currEncodedVideoFrame.mDistanceFromFactory = 0;
+            
             if (this->mEncodedVideoFrameBufferOffset + 1 == this->mEncodedVideoFrameBuffer.size())
                 this->mFillingEncodedVideoFrameBuffer = false;
 
@@ -232,6 +297,7 @@ private:
     std::vector<int64_t> mInternalMonotonicPtsBuffer;
     std::vector<int64_t> mInternalDatePtsBuffer;
 
+    
 };
 
 }

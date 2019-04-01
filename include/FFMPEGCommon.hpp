@@ -24,8 +24,8 @@
 #include "YUYV422PackedFrame.hpp"
 #include "YUV422PlanarFrame.hpp"
 #include "YUV444PlanarFrame.hpp"
-#include "NV12_PlanarFrame.hpp"
-#include "NV21_PlanarFrame.hpp"
+#include "NV12PlanarFrame.hpp"
+#include "NV21PlanarFrame.hpp"
 #include "MJPEGFrame.hpp"
 #include "H264Frame.hpp"
 #include "MP2Frame.hpp"
@@ -83,12 +83,12 @@ AVPixelFormat FFMPEGUtils::translatePixelFormat<YUV444_PLANAR>()
     return AV_PIX_FMT_YUV444P;
 }
 template <>
-AVPixelFormat FFMPEGUtils::translatePixelFormat<NV_12_PLANAR>()
+AVPixelFormat FFMPEGUtils::translatePixelFormat<NV12_PLANAR>()
 {
     return AV_PIX_FMT_NV12;
 }
 template <>
-AVPixelFormat FFMPEGUtils::translatePixelFormat<NV_21_PLANAR>()
+AVPixelFormat FFMPEGUtils::translatePixelFormat<NV21_PLANAR>()
 {
     return AV_PIX_FMT_NV21;
 }
@@ -128,6 +128,11 @@ enum AVCodecID FFMPEGUtils::translateCodec<MP2>()
 {
     return AV_CODEC_ID_MP2;
 }
+template <>
+enum AVCodecID FFMPEGUtils::translateCodec<OPUS>()
+{
+    return AV_CODEC_ID_OPUS;
+}
 
 template <>
 const char* FFMPEGUtils::translateContainer<ADTS_AAC>()
@@ -143,6 +148,11 @@ template <>
 const char* FFMPEGUtils::translateContainer<MATROSKA>()
 {
     return "matroska";
+}
+template <>
+const char* FFMPEGUtils::translateContainer<OPUS>()
+{
+    return "libopus";
 }
 
 int convertToFFMPEGProfile(enum H264Profiles profile)
@@ -313,6 +323,25 @@ const char* convertToFFMPEGTune(enum H264Tunes tune)
     return ret;
 }
 
+const char* convertToFFMPEGOpusApplication(enum OpusApplications application)
+{
+    const char* ret = "";
+    switch(application)
+    {
+    case (OPUS_VOIP):
+        ret = "voip";
+        break;
+    case (OPUS_AUDIO):
+        ret = "audio";
+        break;
+    case (OPUS_LOWDELAY):
+        ret = "lowdelay";
+        break;       
+    default:
+        break;
+    }
+    return ret;    
+}
 }
 
 #endif // FFMPEGCOMMON_HPP_INCLUDED

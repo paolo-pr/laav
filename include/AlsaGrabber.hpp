@@ -28,8 +28,8 @@ extern "C"
 
 #include <iostream>
 #include <fstream>
+#include "Medium.hpp"
 #include "AllAudioCodecsAndFormats.hpp"
-#include "Common.hpp"
 #include "EventsManager.hpp"
 #include "AudioFrameHolder.hpp"
 
@@ -68,17 +68,18 @@ enum AlsaDeviceError
     ALSA_OPEN_DEVICE_ERROR
 };
 
-template <typename CodecOrFormat, unsigned int audioSampleRate, enum AudioChannels audioChannels>
-class AlsaGrabber : public EventsProducer
+template <typename CodecOrFormat, typename audioSampleRate, typename audioChannels>
+class AlsaGrabber : private EventsProducer, public Medium
 {
 
 public:
-
-    AlsaGrabber(SharedEventsCatcher eventsCatcher,
-                const std::string& devName, snd_pcm_uframes_t samplesPerPeriod = 0):
+    
+    AlsaGrabber(SharedEventsCatcher eventsCatcher, const std::string& devName, 
+                snd_pcm_uframes_t samplesPerPeriod = 0, const std::string& id = "") :
         EventsProducer::EventsProducer(eventsCatcher),
+        Medium(id),
         mAlsaError(ALSA_NO_ERROR),
-        mStatus(DEV_INITIALIZING),
+        mDeviceStatus(DEV_INITIALIZING),
         mErrno(0),
         mUnrecoverableState(false),
         mPollFds(NULL),
@@ -88,16 +89,23 @@ public:
 
         snd_lib_error_set_handler(dontPrintErrors);
 
-        if (samplesPerPeriod == 0)
+        if (samplesPerPeriod <= 0)
             mSamplesPerPeriod = 64;
         else
             mSamplesPerPeriod = samplesPerPeriod;
 
-        if (openDevice())
+        try
         {
+            openDevice();
             configureDevice();
             if (!mUnrecoverableState)
+            {
                 startCapturing();
+                mInputStatus  = READY;
+            }
+        }
+        catch (AlsaDeviceError err)
+        {
         }
     }
 
@@ -108,25 +116,36 @@ public:
     }
 
     /*!
-     *  \exception MediaException(MEDIA_NO_DATA)
+     *  \exception MediumException
      */
     AudioFrame<CodecOrFormat, audioSampleRate, audioChannels>& grabNextPeriod()
     {
+        Medium::mOutputStatus  = NOT_READY;  
+        
         if (mUnrecoverableState)
-        {
-            throw MediaException(MEDIA_NO_DATA);
-        }
+            throw MediumException(INPUT_NOT_READY);
+
+        if (Medium::mInputStatus == PAUSED)
+            throw MediumException(MEDIUM_PAUSED);
 
         if (mPollFds == NULL)
         {
-            if (openDevice())
+            mInputStatus  = NOT_READY;
+            mOutputStatus = NOT_READY;              
+            try
             {
+                openDevice();
                 configureDevice();
                 if (!mUnrecoverableState)
+                {
                     startCapturing();
+                    Medium::mInputStatus  = READY;                        
+                }
             }
-            else
-                throw MediaException(MEDIA_NO_DATA);
+            catch (AlsaDeviceError err)
+            {
+                throw MediumException(INPUT_NOT_READY);
+            }
         }
 
         if (mSamplesAvaible)
@@ -134,16 +153,16 @@ public:
             if (snd_pcm_state(mAlsaDevHandle) == SND_PCM_STATE_DISCONNECTED)
             {
                 closeDevice();
-                mStatus = DEV_DISCONNECTED;
+                mDeviceStatus = DEV_DISCONNECTED;
                 mAlsaError = ALSA_DEV_DISCONNECTED;
                 mErrno = errno;
-                throw MediaException(MEDIA_NO_DATA);
+                throw MediumException(OUTPUT_NOT_READY);
             }
             else
             {
                 mAlsaError = ALSA_NO_ERROR;
                 mErrno = 0;
-                mStatus = DEV_CAN_GRAB;
+                mDeviceStatus = DEV_CAN_GRAB;
             }
 
             observeEventsOn(mPollFds[0].fd);
@@ -154,21 +173,21 @@ public:
                 //FIXME?
                 if (availableSamples > mSamplesPerPeriod*8)
                 {
-                    /* 
-                       std::cerr << "Alsa Buffer underrun: available: " 
+                    
+                       loggerLevel2 << "Alsa Buffer underrun: available: " 
                        << availableSamples << " samplesPerPeriod: " << 
-                       mSamplesPerPeriod << "\n"; 
-                    */                    
-                    mustReset = true;
+                       mSamplesPerPeriod << std::endl; 
+                                
+                    mustReset = true;               
                 }
                 availableSamples = mSamplesPerPeriod;                
             }
-            mCapturedRawAudioFrame.setSize(availableSamples * 2 * (audioChannels + 1));
+            mCapturedRawAudioFrame.setSize(availableSamples * 2 * (audioChannels::value + 1));
             mCapturedRawAudioFrame.setTimestampsToNow();
             int ret = snd_pcm_readi(mAlsaDevHandle, mCapturedRawAudioDataPtr, availableSamples);
             if (ret == -EBADFD || ret == -EPIPE || ret == -ESTRPIPE)
             {
-                throw MediaException(MEDIA_NO_DATA);
+                throw MediumException(OUTPUT_NOT_READY);
             }
             if(mustReset)
                 snd_pcm_reset(mAlsaDevHandle);
@@ -176,9 +195,13 @@ public:
         }
         else
         {
-            throw MediaException(MEDIA_NO_DATA);
+            throw MediumException(OUTPUT_NOT_READY);
         }
 
+        mCapturedRawAudioFrame.mFactoryId = Medium::mId;
+        mInputAudioFrameFactoryId = "ALSADEV";        
+        Medium::mOutputStatus  = READY;   
+        Medium::mDistanceFromInputAudioFrameFactory = 1;
         return mCapturedRawAudioFrame;
     }
 
@@ -186,14 +209,18 @@ public:
     operator >>
     (AudioFrameHolder<CodecOrFormat, audioSampleRate, audioChannels>& audioFrameHolder)
     {
+        Medium& m = audioFrameHolder;
+        setDistanceFromInputAudioFrameFactory(m, 1);        
+        setInputAudioFrameFactoryId(m, mId);       
+        setStatusInPipe(m, READY);
+        
         try
         {
             audioFrameHolder.hold(grabNextPeriod());
-            audioFrameHolder.mMediaStatusInPipe = MEDIA_READY;
         }
-        catch (const MediaException& mediaException)
+        catch (const MediumException& mediumException)
         {
-            audioFrameHolder.mMediaStatusInPipe = mediaException.cause();
+            setStatusInPipe(m, NOT_READY);
         }
         return audioFrameHolder;
     }
@@ -203,21 +230,25 @@ public:
     operator >>
     (FFMPEGAudioEncoder<CodecOrFormat, AudioCodec, audioSampleRate, audioChannels>& audioEncoder)
     {
+        Medium& m = audioEncoder;
+        setDistanceFromInputAudioFrameFactory(m, 1);        
+        setInputAudioFrameFactoryId(m, mId);   
+        setStatusInPipe(m, READY);        
+        
         try
         {
-            audioEncoder.encode(grabNextPeriod());
-            audioEncoder.mMediaStatusInPipe = MEDIA_READY;
+            audioEncoder.encode(grabNextPeriod());            
         }
-        catch (const MediaException& e)
+        catch (const MediumException& e)
         {
-            audioEncoder.mMediaStatusInPipe = e.cause();
+            setStatusInPipe(m, NOT_READY);
         }
         return audioEncoder;
     }
 
     template <typename ConvertedPCMSoundFormat,
-              unsigned int convertedAudioSampleRate,
-              enum AudioChannels convertedAudioChannels>
+              typename convertedAudioSampleRate,
+              typename convertedAudioChannels>
     FFMPEGAudioConverter<CodecOrFormat, audioSampleRate, audioChannels,
                          ConvertedPCMSoundFormat, convertedAudioSampleRate, convertedAudioChannels>&
     operator >>
@@ -225,14 +256,18 @@ public:
                           ConvertedPCMSoundFormat, convertedAudioSampleRate, convertedAudioChannels>&
                           audioConverter)
     {
+        Medium& m = audioConverter;
+        setDistanceFromInputAudioFrameFactory(m, 1);        
+        setInputAudioFrameFactoryId(m, mId);          
+        setStatusInPipe(m, READY);
+        
         try
         {
             audioConverter.convert(grabNextPeriod());
-            audioConverter.mMediaStatusInPipe = MEDIA_READY;
         }
-        catch (const MediaException& mediaException)
+        catch (const MediumException& mediumException)
         {
-            audioConverter.mMediaStatusInPipe = mediaException.cause();
+            setStatusInPipe(m, NOT_READY);            
         }
         return audioConverter;
     }
@@ -291,7 +326,7 @@ public:
 
     enum DeviceStatus status() const
     {
-        return mStatus;
+        return mDeviceStatus;
     }
 
     bool isInUnrecoverableState() const
@@ -306,13 +341,16 @@ private:
     }
 
 
-    bool openDevice()
+    /*!
+     * \exception AlsaDeviceError
+     */
+    void openDevice()
     {
         if (snd_pcm_open(&mAlsaDevHandle, mDevName.c_str(), SND_PCM_STREAM_CAPTURE, 0) < 0)
         {
             mAlsaError = ALSA_OPEN_DEVICE_ERROR;
             mErrno = errno;
-            return false;
+            throw mAlsaError;
         }
 
         unsigned int count;
@@ -322,7 +360,7 @@ private:
             mAlsaError = NOT_POLLABLE_DEVICE_ERROR;
             mErrno = errno;
             mUnrecoverableState = true;
-            return false;
+            throw mAlsaError;
         }
 
         mPollFds = (pollfd* )malloc(sizeof(struct pollfd) * count);
@@ -330,10 +368,12 @@ private:
         makePollable(mPollFds[0].fd);
         mAlsaError = ALSA_NO_ERROR;
         mErrno = 0;
-        return true;
     }
 
-    bool configureDevice()
+    /*!
+     * \exception AlsaDeviceError
+     */    
+    void configureDevice()
     {
         int dir = 0;
         unsigned int val;
@@ -344,7 +384,7 @@ private:
             mAlsaError = SET_SND_PCM_ACCESS_RW_INTERLEAVED_ERROR;
             mErrno = errno;
             mUnrecoverableState = true;
-            return false;
+            throw mAlsaError;
         }
         if (snd_pcm_hw_params_set_format(mAlsaDevHandle, mHWparams,
                                          AlsaUtils::translateSoundFormat<CodecOrFormat>()) != 0)
@@ -352,23 +392,23 @@ private:
             mAlsaError = SET_SND_PCM_FORMAT_ERROR;
             mErrno = errno;
             mUnrecoverableState = true;
-            return false;
+            throw mAlsaError;
         }
-        if (snd_pcm_hw_params_set_channels(mAlsaDevHandle, mHWparams, (audioChannels + 1)) != 0)
+        if (snd_pcm_hw_params_set_channels(mAlsaDevHandle, mHWparams, (audioChannels::value + 1)) != 0)
         {
             mAlsaError = SET_AUDIO_CHANNELS_ERROR;
             mErrno = errno;
             mUnrecoverableState = true;
-            return false;
+            throw mAlsaError;
         }
 
-        val = audioSampleRate;
+        val = audioSampleRate::value;
         if (snd_pcm_hw_params_set_rate_near(mAlsaDevHandle, mHWparams, &val, &dir) != 0)
         {
             mAlsaError = SET_SAMPLE_RATE_ERROR;
             mErrno = errno;
             mUnrecoverableState = true;
-            return false;
+            throw mAlsaError;
         }
 
         snd_pcm_uframes_t periodSize = mSamplesPerPeriod;
@@ -378,7 +418,7 @@ private:
             mAlsaError = SET_PERIOD_SIZE_ERROR;
             mErrno = errno;
             mUnrecoverableState = true;
-            return false;
+            throw mAlsaError;
         }
         
         snd_pcm_hw_params_get_period_size(mHWparams, &periodSize, &dir);
@@ -395,53 +435,55 @@ private:
             mAlsaError = SET_PCM_HW_PARAMS_ERROR;
             mErrno = errno;
             mUnrecoverableState = true;
-            return false;
+            throw mAlsaError;
         }
          // 2 bytes per sample * num  of channels
-        unsigned int periodBufferSize = mSamplesPerPeriod * 2 * (audioChannels + 1);
+        unsigned int periodBufferSize = mSamplesPerPeriod * 2 * (audioChannels::value + 1);
         // TODO: manage out of memory error?
         mCapturedRawAudioDataPtr = new unsigned char[periodBufferSize*2]();
         fillAudioFrame(mCapturedRawAudioFrame);
         observeEventsOn(mPollFds[0].fd);
-        mStatus = DEV_CONFIGURED;
+        mDeviceStatus = DEV_CONFIGURED;
         mAlsaError = ALSA_NO_ERROR;
         mErrno = 0;
-        return true;
     }
 
-    bool startCapturing()
+    /*!
+     * \exception AlsaDeviceError
+     */    
+    void startCapturing()
     {
         if (snd_pcm_start(mAlsaDevHandle) != 0)
         {
             mAlsaError = SND_PCM_START_ERROR;
             mErrno = errno;
             mUnrecoverableState = true;
-            return false;
+            throw mAlsaError;
         }
         else
         {
-            mStatus = DEV_CAN_GRAB;
+            mDeviceStatus = DEV_CAN_GRAB;
             mAlsaError = ALSA_NO_ERROR;
             mErrno = 0;
-            return true;
+            throw mAlsaError;
         }
     }
 
-    bool closeDevice()
+    void closeDevice()
     {
         if (mPollFds != NULL)
-        {
-            free(mPollFds);
+        {        
+            snd_pcm_close(mAlsaDevHandle); 
+            free(mPollFds);                
             mPollFds = NULL;
-            snd_pcm_close(mAlsaDevHandle);
         }
-
-        return true;
+        Medium::mInputStatus  = NOT_READY; 
+        Medium::mOutputStatus = NOT_READY;         
     }
 
     void fillAudioFrame(PackedRawAudioFrame& rawAudioFrame)
     {
-        unsigned int periodBufferSize = mSamplesPerPeriod * 2 * (audioChannels + 1);
+        unsigned int periodBufferSize = mSamplesPerPeriod * 2 * (audioChannels::value + 1);
         auto freePeriodDataMemory = [periodBufferSize] (unsigned char* audioFrameDataPtr)
         {
             delete [] audioFrameDataPtr;
@@ -458,7 +500,7 @@ private:
     }
 
     enum AlsaDeviceError mAlsaError;
-    enum DeviceStatus mStatus;
+    enum DeviceStatus mDeviceStatus;
     int mErrno;
     bool mUnrecoverableState;
     unsigned char* mCapturedRawAudioDataPtr;

@@ -24,8 +24,10 @@
 #include "FloatPackedFrame.hpp"
 #include "ADTSAACFrame.hpp"
 #include "MP2Frame.hpp"
+#include "OpusFrame.hpp"
 
 #include "FFMPEGMP2Encoder.hpp"
+#include "FFMPEGOpusEncoder.hpp"
 #include "FFMPEGADTSAACEncoder.hpp"
 
 #endif // ALLAUDIOCODECSANDFORMATS_HPP_INCLUDED

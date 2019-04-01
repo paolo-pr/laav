@@ -26,44 +26,79 @@ namespace laav
 {
 
 template <typename Container,
-          typename VideoCodecOrFormat, unsigned int width, unsigned int height,
-          typename AudioCodecOrFormat, unsigned int audioSampleRate, enum AudioChannels audioChannels>
+          typename VideoCodecOrFormat, typename width, typename height,
+          typename AudioCodecOrFormat, typename audioSampleRate, typename audioChannels>
 class UDPAudioVideoStreamer : public UDPStreamer<Container>
 {
 
 public:
 
-    UDPAudioVideoStreamer(std::string address, unsigned int port) :
-        UDPStreamer<Container>(address, port),
-        mAudioVideoMuxer(true)
+    UDPAudioVideoStreamer(std::string address, unsigned int port, const std::string& id = "") :
+        UDPStreamer<Container>(address, port, id),
+        mAudioVideoMuxer(id+"EmbeddedMux")
     {
+        this->logStreamAddr(constantToString<Container>()+"-"+constantToString<AudioCodecOrFormat>()
+        +"-"+constantToString<VideoCodecOrFormat>());   
     }
 
     /*!
-     *  \exception MediaException(MEDIA_NO_DATA)
+     *  \exception MediumException
      */
     void takeStreamableFrame(const VideoFrame<VideoCodecOrFormat, width, height>& videoFrameToStream)
     {
-        if (this->mStatus == MEDIA_READY)
-            mAudioVideoMuxer.takeMuxableFrame(videoFrameToStream);
+        if (videoFrameToStream.isEmpty())
+            throw MediumException(INPUT_EMPTY);         
+        
+        Medium::mInputVideoFrameFactoryId = videoFrameToStream.mFactoryId; 
+        Medium::mDistanceFromInputVideoFrameFactory = videoFrameToStream.mDistanceFromFactory + 1;  
+
+        if (Medium::mInputStatus ==  PAUSED)
+            throw MediumException(MEDIUM_PAUSED);  
+        
+        if (Medium::mStatusInPipe ==  NOT_READY)
+            throw MediumException(PIPE_NOT_READY);        
+        
+        mAudioVideoMuxer.mux(videoFrameToStream);        
     }
 
     /*!
-     *  \exception MediaException(MEDIA_NO_DATA)
+     *  \exception MediumException
      */
     void takeStreamableFrame(const AudioFrame<AudioCodecOrFormat, audioSampleRate,
                                               audioChannels>& audioFrameToStream)
     {
-        mAudioVideoMuxer.takeMuxableFrame(audioFrameToStream);
+        if (audioFrameToStream.isEmpty())
+            throw MediumException(INPUT_EMPTY);        
+        
+        Medium::mInputAudioFrameFactoryId = audioFrameToStream.mFactoryId; 
+        Medium::mDistanceFromInputAudioFrameFactory = audioFrameToStream.mDistanceFromFactory + 1;
+        
+        if (Medium::mInputStatus ==  PAUSED)
+            throw MediumException(MEDIUM_PAUSED); 
+        
+        if (Medium::mStatusInPipe ==  NOT_READY)
+            throw MediumException(PIPE_NOT_READY); 
+        
+        mAudioVideoMuxer.mux(audioFrameToStream);        
     }
 
+    /*!
+     *  \exception MediumException
+     */    
     void streamMuxedData()
     {   
+        if (Medium::mInputStatus ==  PAUSED)
+            throw MediumException(MEDIUM_PAUSED);
+        
+        if (Medium::mStatusInPipe ==  NOT_READY)
+            throw MediumException(PIPE_NOT_READY);        
+        
         const std::vector<MuxedAudioVideoData<Container, VideoCodecOrFormat,
                                                 width, height,
                                                 AudioCodecOrFormat, audioSampleRate,
                                                 audioChannels> >&                                              
         chunksToStream = mAudioVideoMuxer.muxedAudioVideoChunks();
+        Medium::mOutputStatus = READY;        
         unsigned int n;
         
         std::vector<unsigned char> dataToStream;
@@ -76,6 +111,7 @@ public:
         if (sendto(this->mSock, dataToStream.data(), dataToStream.size(), 0, 
             (const sockaddr* )&this->mSockAddr, this->mSlen)==-1)
             printAndThrowUnrecoverableError("UDPAudioVideoStreamer::streamMuxedData(); sendto() error");
+        Medium::mOutputStatus = READY;         
     }
 
 private:

@@ -1,5 +1,5 @@
 /* 
- * Created (25/04/2017) by Paolo-Pr.
+ * Created (15/03/2019) by Paolo-Pr.
  * This file is part of Live Asynchronous Audio Video Library.
  *
  * Live Asynchronous Audio Video Library is free software: you can redistribute it and/or modify
@@ -17,21 +17,22 @@
  *
  */
 
-#ifndef SIGNED16PACKEDFRAME_HPP_INCLUDED
-#define SIGNED16PACKEDFRAME_HPP_INCLUDED
+#ifndef OPUSFRAME_HPP_INCLUDED
+#define OPUSFRAME_HPP_INCLUDED
 
 #include "Frame.hpp"
 
 namespace laav
 {
 
-class S16_LE {};
+class OPUS {};
 
 template <typename audioSampleRate, typename audioChannels>
-class AudioFrame<S16_LE, audioSampleRate, audioChannels> : public FrameBase, public PackedRawAudioFrame
+class AudioFrame<OPUS, audioSampleRate, audioChannels> :
+public EncodedAudioFrame<OPUS>
 {
 };
 
 }
 
-#endif // SIGNED16PACKEDFRAME_HPP_INCLUDED
+#endif // OPUSFRAME_HPP_INCLUDED

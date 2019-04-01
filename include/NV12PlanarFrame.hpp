@@ -17,29 +17,48 @@
  *
  */
 
-#ifndef MJPEGFRAME_HPP_INCLUDED
-#define MJPEGFRAME_HPP_INCLUDED
+#ifndef NV12PLANARFRAME_HPP_INCLUDED
+#define NV12PLANARFRAME_HPP_INCLUDED
 
 namespace laav
 {
 
-class MJPEG {};
+class NV12_PLANAR {};
 
 template <typename width_, typename height_>
-class VideoFrame<MJPEG, width_, height_> :
+class VideoFrame<NV12_PLANAR, width_, height_> :
 public VideoFrameBase<width_, height_>,
-public EncodedVideoFrame
+public Planar3RawVideoFrame,
+public FormattedRawVideoFrame<unsigned char, unsigned char, unsigned char>
 {
 
 public:
 
-    VideoFrame<MJPEG, width_, height_> ():
-        EncodedVideoFrame(width_::value, height_::value)
+    VideoFrame<NV12_PLANAR, width_, height_>() :
+        Planar3RawVideoFrame(width_::value, height_::value)
     {
+    }
+
+    /*!
+     *  \exception OutOfBounds
+     */    
+    const Pixel<unsigned char, unsigned char, unsigned char>& pixelAt(uint16_t x, uint16_t y) const
+    {
+        printAndThrowUnrecoverableError("NOT IMPLEMENTED YET! TODO!");
+        return mCurrPixel;
+    }
+
+    /*!
+     *  \exception OutOfBounds
+     */
+    void setPixelAt(const Pixel<unsigned char, unsigned char, unsigned char>& pixel,
+                    uint16_t x, uint16_t y)
+    {
+        printAndThrowUnrecoverableError("NOT IMPLEMENTED YET! TODO!");
     }
 
 };
 
 }
 
-#endif // MJPEGFRAME_HPP_INCLUDED
+#endif // NV12_PLANARFRAME_HPP_INCLUDED

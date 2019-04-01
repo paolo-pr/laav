@@ -26,35 +26,70 @@ namespace laav
 {
 
 template <typename Container, typename AudioCodecOrFormat,
-          unsigned int audioSampleRate, enum AudioChannels audioChannels>
+          typename audioSampleRate, typename audioChannels>
 class HTTPAudioStreamer : public HTTPStreamer<Container>
 {
 
 public:
 
-    HTTPAudioStreamer(SharedEventsCatcher eventsCatcher, std::string address, unsigned int port) :
-        HTTPStreamer<Container>(eventsCatcher, address, port),
-        mAudioMuxer(false)
+    HTTPAudioStreamer(SharedEventsCatcher eventsCatcher, std::string address, 
+                      unsigned int port, const std::string& id = "") :
+        HTTPStreamer<Container>(eventsCatcher, address, port, id),
+        mAudioMuxer("")
     {
+        this->logStreamAddr(constantToString<Container>()+"-"+constantToString<AudioCodecOrFormat>());
     }
-
+    
+    template <typename PCMSoundFormat>
+    HTTPAudioStreamer(SharedEventsCatcher eventsCatcher, std::string address, 
+                      unsigned int port, FFMPEGAudioEncoder<PCMSoundFormat, AudioCodecOrFormat, audioSampleRate, audioChannels>& aEnc, 
+                      const std::string& id = "") :
+        HTTPStreamer<Container>(eventsCatcher, address, port, id),
+        mAudioMuxer(aEnc, "")
+    {
+        this->logStreamAddr(constantToString<Container>()+"-"+constantToString<AudioCodecOrFormat>());
+    }
+    
     /*!
-     *  \exception MediaException(MEDIA_NO_DATA)
+     *  \exception MediumException
      */
     void takeStreamableFrame(const AudioFrame<AudioCodecOrFormat,
                                               audioSampleRate, audioChannels>& audioFrameToStream)
-    {
-        if (this->mStatus == MEDIA_READY)
-            mAudioMuxer.takeMuxableFrame(audioFrameToStream);
+    {        
+        if (audioFrameToStream.isEmpty())
+            throw MediumException(INPUT_EMPTY);        
+        
+        Medium::mInputAudioFrameFactoryId = audioFrameToStream.mFactoryId;
+        Medium::mDistanceFromInputAudioFrameFactory = audioFrameToStream.mDistanceFromFactory + 1;
+        
+        if (Medium::mInputStatus ==  PAUSED)
+            throw MediumException(MEDIUM_PAUSED);
+        
+        if (Medium::mStatusInPipe ==  NOT_READY)
+            throw MediumException(PIPE_NOT_READY);
+
+        if (this->mClientConnectionsAndRequests.size() == 0)
+            throw MediumException(INPUT_NOT_READY);        
+        
+        mAudioMuxer.mux(audioFrameToStream);                
     }
 
-    // Todo extract common code and move it to
+    // TODO: extract common code and move it to
     // base class (do the same for video and audiovideo streamers)
+    /*!
+     *  \exception MediumException
+     */    
     void streamMuxedData()
     {
-        if (this->mClientConnectionsAndRequests.size() != 0 && this->mStatus == MEDIA_READY)
-        {
-            try
+        if (Medium::mInputStatus ==  PAUSED)
+            throw MediumException(MEDIUM_PAUSED);
+        
+        if (Medium::mStatusInPipe ==  NOT_READY)
+            throw MediumException(PIPE_NOT_READY);
+        
+        if (this->mClientConnectionsAndRequests.size() != 0)
+        {      
+            //try
             {
                 using Iter3 = std::map<struct evhttp_connection*, struct evhttp_request* >::iterator;
                 for (Iter3 it = this->mClientConnectionsAndRequests.begin();
@@ -64,7 +99,7 @@ public:
                     const std::vector<MuxedAudioData<Container, AudioCodecOrFormat,
                                       audioSampleRate, audioChannels> >& chunksToStream =
                     mAudioMuxer.muxedAudioChunks();
-
+                    Medium::mOutputStatus = READY;
                     unsigned int n;
                     struct evbuffer* buf = evbuffer_new();
                     if (this->mWrittenHeaderFlagAndRequests[it->second] == false)
@@ -81,46 +116,23 @@ public:
                     }
                     evhttp_send_reply_chunk(it->second, buf);
                     evbuffer_free(buf);
+                    Medium::mOutputStatus = READY;                     
                 }
             }
+            /*
             catch (const MediaException& mediaException)
             {
                 // DO next step
-            }
+            }*/
         }
+        else
+            throw MediumException(OUTPUT_NOT_READY);
     }
 
 private:
-
-    void hTTPDisconnectionCallBack(struct evhttp_connection* clientConnection)
-    {
-        this->mWrittenHeaderFlagAndRequests.erase(this->mClientConnectionsAndRequests[clientConnection]);
-        evhttp_request_free(this->mClientConnectionsAndRequests[clientConnection]);
-        this->mClientConnectionsAndRequests.erase(clientConnection);
-        if (this->mClientConnectionsAndRequests.size() == 0)
-        {
-            mAudioMuxer.stopMuxing();
-            this->mIsStreaming = false;           
-        }
-    }
-
-    void hTTPConnectionCallBack(struct evhttp_request* clientRequest,
-                                struct evhttp_connection* clientConnection)
-    {
-        this->mClientConnectionsAndRequests[clientConnection] = clientRequest;
-
-        if (mAudioMuxer.isMuxing())
-            this->mWrittenHeaderFlagAndRequests[clientRequest] = false;
-        else
-            this->mWrittenHeaderFlagAndRequests[clientRequest] = true;
-
-        evhttp_send_reply_start(clientRequest, HTTP_OK, "OK");
-        this->mIsStreaming = true;        
-        mAudioMuxer.startMuxing();
-    }
-
+  
     FFMPEGAudioMuxer<Container, AudioCodecOrFormat, audioSampleRate, audioChannels> mAudioMuxer;
-
+    
 };
 
 }

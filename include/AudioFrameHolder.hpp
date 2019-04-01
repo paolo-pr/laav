@@ -20,38 +20,65 @@
 #define AUDIOFRAMEHOLDER_HPP_INCLUDED
 
 #include "FFMPEGAudioConverter.hpp"
+#include "FFMPEGAudioVideoMuxer.hpp"
 
 namespace laav
 {
 
-template <typename CodecOrFormat, unsigned int audioSampleRate, enum AudioChannels audioChannels>
-class AudioFrameHolder
+template <typename CodecOrFormat, typename audioSampleRate, typename audioChannels>
+class AudioFrameHolder : public Medium
 {
 
 public:
 
-    AudioFrameHolder() :
-        mMediaStatusInPipe(MEDIA_NOT_READY)
+    AudioFrameHolder(const std::string& id = "") :
+        Medium(id)
     {
+        Medium::mInputStatus = READY;        
     }
 
+    /*!
+     *  \exception MediumException
+     */    
     void hold(const AudioFrame<CodecOrFormat, audioSampleRate, audioChannels>& audioFrame)
     {
+        if (audioFrame.isEmpty())
+            throw MediumException(INPUT_EMPTY);  
+       
+        mInputAudioFrameFactoryId = audioFrame.mFactoryId;
+        Medium::mDistanceFromInputAudioFrameFactory = audioFrame.mDistanceFromFactory + 1;        
+        
+        if (Medium::mInputStatus ==  PAUSED)
+            throw MediumException(MEDIUM_PAUSED);
+
+        if (Medium::mStatusInPipe ==  NOT_READY)
+            throw MediumException(PIPE_NOT_READY);        
+
+        Medium::mOutputStatus = READY;        
         mAudioFrame = audioFrame;
     }
 
     /*!
-     *  \exception MediaException(MEDIA_NO_DATA)
+     *  \exception MediumException
      */
     AudioFrame<CodecOrFormat, audioSampleRate, audioChannels>& get()
-    {
-        if (mMediaStatusInPipe != MEDIA_READY || isFrameEmpty(mAudioFrame))
-            throw MediaException(MEDIA_NO_DATA);
+    {     
+        if (Medium::mStatusInPipe ==  NOT_READY)
+            throw MediumException(PIPE_NOT_READY);            
+        
+        mAudioFrame.mDistanceFromFactory = Medium::mDistanceFromInputAudioFrameFactory;
+        
+        if (Medium::mOutputStatus ==  NOT_READY)
+            throw MediumException(OUTPUT_NOT_READY);        
+        
+        if (Medium::mInputStatus ==  PAUSED)
+            throw MediumException(MEDIUM_PAUSED);
+
         return mAudioFrame;
     }
 
-    template <typename ConvertedPCMSoundFormat, unsigned int convertedAudioSampleRate,
-              enum AudioChannels convertedAudioChannels>
+    template <typename ConvertedPCMSoundFormat, typename convertedAudioSampleRate,
+              typename convertedAudioChannels>
     FFMPEGAudioConverter<CodecOrFormat, audioSampleRate, audioChannels,
                          ConvertedPCMSoundFormat, convertedAudioSampleRate, convertedAudioChannels>&
     operator >>
@@ -59,19 +86,23 @@ public:
                           ConvertedPCMSoundFormat, convertedAudioSampleRate, convertedAudioChannels>&
      audioConverter)
     {
+        Medium& m = audioConverter;
+        setDistanceFromInputAudioFrameFactory(m, mDistanceFromInputAudioFrameFactory + 1);        
+        setInputAudioFrameFactoryId(m, mInputAudioFrameFactoryId);         
+        setStatusInPipe(m, READY);
+        
         try
         {
-            audioConverter.convert(get());
-            audioConverter.mMediaStatusInPipe = MEDIA_READY;
+            audioConverter.convert(get());          
         }
-        catch (const MediaException& mediaException)
+        catch (const MediumException& mediumException)
         {
-            audioConverter.mMediaStatusInPipe = mediaException.cause();
+            setStatusInPipe(m, NOT_READY);            
         }
         return audioConverter;
     }
 
-    template <typename Container, typename VideoCodec, unsigned int width, unsigned int height>
+    template <typename Container, typename VideoCodec, typename width, typename height>
     FFMPEGAudioVideoMuxer<Container,
                           VideoCodec, width, height,
                           CodecOrFormat, audioSampleRate, audioChannels>&
@@ -80,19 +111,24 @@ public:
                            VideoCodec, width, height,
                            CodecOrFormat, audioSampleRate, audioChannels>& audioVideoMuxer)
     {
+        Medium& m = audioVideoMuxer;
+        setDistanceFromInputAudioFrameFactory(m, mDistanceFromInputAudioFrameFactory + 1);        
+        setInputAudioFrameFactoryId(m, mInputAudioFrameFactoryId);         
+        setStatusInPipe(m, READY);         
+        
         try
         {
-            audioVideoMuxer.takeMuxableFrame(get());
+            audioVideoMuxer.mux(get());           
         }
-        catch (const MediaException& mediaException)
+        catch (const MediumException& mediumException)
         {
-            // End of pipe: don't do anything.
+            setStatusInPipe(m, NOT_READY);            
         }
 
         return audioVideoMuxer;
     }
 
-    template <typename Container, typename VideoCodec, unsigned int width, unsigned int height>
+    template <typename Container, typename VideoCodec, typename width, typename height>
     HTTPAudioVideoStreamer<Container,
                            VideoCodec, width, height,
                            CodecOrFormat, audioSampleRate, audioChannels>&
@@ -101,20 +137,25 @@ public:
                             VideoCodec, width, height,
                             CodecOrFormat, audioSampleRate, audioChannels>& httpAudioVideoStreamer)
     {
+        Medium& m = httpAudioVideoStreamer;
+        setDistanceFromInputAudioFrameFactory(m, mDistanceFromInputAudioFrameFactory + 1);        
+        setInputAudioFrameFactoryId(m, mInputAudioFrameFactoryId);        
+        setStatusInPipe(m, READY);
+        
         try
         {
             httpAudioVideoStreamer.takeStreamableFrame(get());
-            httpAudioVideoStreamer.streamMuxedData();
+            httpAudioVideoStreamer.streamMuxedData();           
         }
-        catch (const MediaException& mediaException)
+        catch (const MediumException& mediumException)
         {
-            // Do nothing, because the streamer is at the end of the pipe
+            setStatusInPipe(m, NOT_READY);            
         }
 
         return httpAudioVideoStreamer;
     }
     
-    template <typename Container, typename VideoCodec, unsigned int width, unsigned int height>
+    template <typename Container, typename VideoCodec, typename width, typename height>
     UDPAudioVideoStreamer<Container,
                            VideoCodec, width, height,
                            CodecOrFormat, audioSampleRate, audioChannels>&
@@ -123,14 +164,19 @@ public:
                             VideoCodec, width, height,
                             CodecOrFormat, audioSampleRate, audioChannels>& udpAudioVideoStreamer)
     {
+        Medium& m = udpAudioVideoStreamer;
+        setDistanceFromInputAudioFrameFactory(m, mDistanceFromInputAudioFrameFactory + 1);        
+        setInputAudioFrameFactoryId(m, mInputAudioFrameFactoryId);         
+        setStatusInPipe(m, READY);        
+        
         try
         {
             udpAudioVideoStreamer.takeStreamableFrame(get());        
-            udpAudioVideoStreamer.streamMuxedData();
+            udpAudioVideoStreamer.streamMuxedData();            
         }
-        catch (const MediaException& mediaException)
+        catch (const MediumException& mediumException)
         {
-            // Do nothing, because the streamer is at the end of the pipe
+            setStatusInPipe(m, NOT_READY);            
         }
 
         return udpAudioVideoStreamer;
@@ -141,14 +187,18 @@ public:
     operator >>
     (FFMPEGAudioEncoder<CodecOrFormat, AudioCodec, audioSampleRate, audioChannels>& audioEncoder)
     {
+        Medium& m = audioEncoder;
+        setDistanceFromInputAudioFrameFactory(m, mDistanceFromInputAudioFrameFactory + 1);        
+        setInputAudioFrameFactoryId(m, mInputAudioFrameFactoryId);             
+        setStatusInPipe(m, READY);        
+        
         try
         {
-            audioEncoder.encode(get());
-            audioEncoder.mMediaStatusInPipe = MEDIA_READY;
+            audioEncoder.encode(get());            
         }
-        catch (const MediaException& e)
+        catch (const MediumException& e)
         {
-            audioEncoder.mMediaStatusInPipe = e.cause();
+            setStatusInPipe(m, NOT_READY);            
         }
         return audioEncoder;
     }
@@ -158,14 +208,19 @@ public:
     operator >>
     (HTTPAudioStreamer<Container, CodecOrFormat, audioSampleRate, audioChannels>& httpAudioStreamer)
     {
+        Medium& m = httpAudioStreamer;
+        setDistanceFromInputAudioFrameFactory(m, mDistanceFromInputAudioFrameFactory + 1);        
+        setInputAudioFrameFactoryId(m, mInputAudioFrameFactoryId); 
+        setStatusInPipe(m, READY);        
+        
         try
         {
             httpAudioStreamer.takeStreamableFrame(get());
-            httpAudioStreamer.streamMuxedData();
+            httpAudioStreamer.streamMuxedData();            
         }
-        catch (const MediaException& mediaException)
+        catch (const MediumException& mediumException)
         {
-            // Do nothing, because the streamer is at the end of the pipe
+            setStatusInPipe(m, NOT_READY);            
         }
 
         return httpAudioStreamer;
@@ -176,14 +231,19 @@ public:
     operator >>
     (UDPAudioStreamer<Container, CodecOrFormat, audioSampleRate, audioChannels>& udpAudioStreamer)
     {
+        Medium& m = udpAudioStreamer;
+        setDistanceFromInputAudioFrameFactory(m, mDistanceFromInputAudioFrameFactory + 1);        
+        setInputAudioFrameFactoryId(m, mInputAudioFrameFactoryId);         
+        setStatusInPipe(m, READY);
+        
         try
         {
             udpAudioStreamer.takeStreamableFrame(get());
-            udpAudioStreamer.streamMuxedData();
+            udpAudioStreamer.streamMuxedData();            
         }
-        catch (const MediaException& mediaException)
+        catch (const MediumException& mediumException)
         {
-            // Do nothing, because the streamer is at the end of the pipe
+            setStatusInPipe(m, NOT_READY);            
         }
 
         return udpAudioStreamer;
@@ -194,22 +254,26 @@ public:
     operator >>
     (FFMPEGAudioMuxer<Container, CodecOrFormat, audioSampleRate, audioChannels>& audioMuxer)
     {
+        Medium& m = audioMuxer;
+        setDistanceFromInputAudioFrameFactory(m, mDistanceFromInputAudioFrameFactory + 1);        
+        setInputAudioFrameFactoryId(m, mInputAudioFrameFactoryId);          
+        setStatusInPipe(m, READY);        
+        
         try
         {
-            audioMuxer.takeMuxableFrame(get());
+            audioMuxer.mux(get());           
         }
-        catch (const MediaException& mediaException)
+        catch (const MediumException& mediumException)
         {
-            // Do nothing, because the streamer is at the end of the pipe
+            setStatusInPipe(m, NOT_READY);            
         }
 
         return audioMuxer;
     }
 
-    enum MediaStatus mMediaStatusInPipe;
-
 private:
 
+    /*
     bool isFrameEmpty(const EncodedAudioFrame<CodecOrFormat>& audioFrame) const
     {
         return audioFrame.size() == 0;
@@ -223,7 +287,7 @@ private:
     bool isFrameEmpty(const Planar2RawAudioFrame& audioFrame) const
     {
         return audioFrame.size<0>() == 0;
-    }
+    }*/
 
     AudioFrame<CodecOrFormat, audioSampleRate, audioChannels> mAudioFrame;
 

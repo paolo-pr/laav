@@ -26,15 +26,10 @@ namespace laav
 {
 
 template <typename Container>
-class Streamer
+class Streamer : public Medium
 {
 
 public:
-
-    enum MediaStatus status() const
-    {
-        return mStatus;
-    }
 
     int getErrno() const
     {
@@ -43,12 +38,13 @@ public:
 
 protected:
 
-    Streamer(std::string address, unsigned int port):
+    Streamer(std::string address, unsigned int port, const std::string& id = ""):
+        Medium(id),
         mAddress(address),
         mPort(port),
-        mStatus(MEDIA_NOT_READY),
         mErrno(0)
-    {       
+    {
+        Medium::mInputStatus = READY;
     }
 
     ~Streamer()
@@ -57,7 +53,6 @@ protected:
 
     std::string mAddress;
     unsigned int mPort;
-    enum MediaStatus mStatus;
     int mErrno;
 
 };

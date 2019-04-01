@@ -23,8 +23,8 @@
 #include "YUV420PlanarFrame.hpp"
 #include "YUYV422PackedFrame.hpp"
 #include "YUV444PlanarFrame.hpp"
-#include "NV12_PlanarFrame.hpp"
-#include "NV21_PlanarFrame.hpp"
+#include "NV12PlanarFrame.hpp"
+#include "NV21PlanarFrame.hpp"
 
 #include "FFMPEGH264Encoder.hpp"
 #include "FFMPEGMJPEGDecoder.hpp"

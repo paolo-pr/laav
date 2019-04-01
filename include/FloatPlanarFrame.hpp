@@ -27,9 +27,9 @@ namespace laav
 
 class FLOAT_PLANAR {};
 
-template <unsigned int audioSampleRate, enum AudioChannels audioChannels>
+template <typename audioSampleRate, typename audioChannels>
 class AudioFrame<FLOAT_PLANAR, audioSampleRate, audioChannels> :
-public Frame, public Planar2RawAudioFrame
+public FrameBase, public Planar2RawAudioFrame
 {
 };
 

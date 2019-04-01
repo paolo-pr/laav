@@ -36,23 +36,88 @@ extern "C"
 namespace laav
 {
 
-template <typename AudioCodec, unsigned int audioSampleRate, enum AudioChannels audioChannels>
+template <typename AudioCodec, typename audioSampleRate, typename audioChannels>
 class AudioFrameHolder;
 
+template <typename Container,
+          typename AudioCodec, 
+          typename audioSampleRate, 
+          typename audioChannels>
+class HTTPAudioStreamer;    
+
+template <typename Container,
+          typename AudioCodec, 
+          typename audioSampleRate, 
+          typename audioChannels>
+class FFMPEGAudioMuxer;
+
+template <typename Container,
+          typename AudioCodec, 
+          typename audioSampleRate, 
+          typename audioChannels>
+class UDPAudioStreamer;
+
+template <typename Container,
+          typename VideoCodecOrFormat,
+          typename width,
+          typename height,
+          typename AudioCodec,
+          typename audioSampleRate,
+          typename audioChannels>
+class HTTPAudioVideoStreamer;
+
+template <typename Container,
+          typename VideoCodecOrFormat,
+          typename width,
+          typename height,
+          typename AudioCodec,
+          typename audioSampleRate,
+          typename audioChannels>
+class FFMPEGAudioVideoMuxer;
+
+template <typename Container,
+          typename VideoCodecOrFormat,
+          typename width,
+          typename height,
+          typename AudioCodec,
+          typename audioSampleRate,
+          typename audioChannels>
+class UDPAudioVideoStreamer;
+
 template <typename PCMSoundFormat, typename AudioCodec,
-          unsigned int audioSampleRate, enum AudioChannels audioChannels>
-class FFMPEGAudioEncoder
+          typename audioSampleRate, typename audioChannels>
+class FFMPEGAudioEncoder : public Medium
 {
 
+// accesses the mVideoCodecContext member for copying the parameters needed by some formats (i.e: matroska)
+template <typename Container,
+          typename AudioCodec_, 
+          typename audioSampleRate_, 
+          typename audioChannels_>
+friend class FFMPEGAudioMuxer;   
+
+template <typename Container, typename VideoCodecOrFormat,
+          typename width, typename height,
+          typename AudioCodec_,
+          typename audioSampleRate_, typename audioChannels_>
+friend class FFMPEGAudioVideoMuxer;    
+    
 public:
 
     /*!
-     *  \exception MediaException(MEDIA_NO_DATA)
-     */
+     *  \exception MediumException
+     */    
     void encode(const AudioFrame<PCMSoundFormat, audioSampleRate, audioChannels>& rawAudioFrame)
     {
-        if (isFrameEmpty(rawAudioFrame))
-            throw MediaException(MEDIA_NO_DATA);
+        
+        if (rawAudioFrame.isEmpty())
+            throw MediumException(INPUT_EMPTY);
+
+        if (Medium::mInputStatus ==  PAUSED)
+            throw MediumException(MEDIUM_PAUSED);
+        
+        if (Medium::mStatusInPipe ==  NOT_READY)
+            throw MediumException(PIPE_NOT_READY);        
 
         unsigned int bufferSize = mRawInputLibAVFrame->linesize[0];
         unsigned int periodSize = getPeriodSize(rawAudioFrame);
@@ -65,20 +130,38 @@ public:
                                                   (bufferSize - mRawInputLibAVFrameBufferOffset));
 
             if (mEncodingStartTime == 0)
+            {
                 mEncodingStartTime = av_rescale_q(av_gettime_relative(),
                                                   AV_TIME_BASE_Q,
                                                   mAudioEncoderCodecContext->time_base);
-
+            }
+                
             int64_t monotonicNow = av_rescale_q(av_gettime_relative(), AV_TIME_BASE_Q,
                                                 mAudioEncoderCodecContext->time_base);
 
+            int64_t diff = monotonicNow -  mFrameCounter;
             mEncodingCurrTime = monotonicNow;// - mEncodingStartTime;
-
-            this->mRawInputLibAVFrame->pts = mEncodingCurrTime;
-
+            
+            if(FFMPEGUtils::translateCodec<AudioCodec>() == AV_CODEC_ID_OPUS)
+            {   
+                // Reset the pts (in case of a reconnection of the dev)
+                // TODO: use a more precise value
+                if (diff == 0 || diff >= 2000)
+                    mFrameCounter = monotonicNow;
+                
+                this->mRawInputLibAVFrame->pts = mFrameCounter;
+                monotonicNow = mFrameCounter;
+                mEncodingCurrTime = monotonicNow;
+                mFrameCounter += mRawInputLibAVFrame->nb_samples;                 
+            }
+            else
+                this->mRawInputLibAVFrame->pts = mEncodingCurrTime;
+            
             int ret = avcodec_send_frame(this->mAudioEncoderCodecContext, this->mRawInputLibAVFrame);
             if (ret == AVERROR(EAGAIN))
+            {
                 return;
+            }
             else if (ret != 0)
                 printAndThrowUnrecoverableError("avcodec_send_frame(...)");
 
@@ -93,10 +176,10 @@ public:
             AVPacket& currPkt = mEncodedAudioPktBuffer[mEncodedAVPacketBufferOffset];
 
             int ret2 = avcodec_receive_packet(this->mAudioEncoderCodecContext, &currPkt);
-
+            
             // Buffering
             if (ret2 == AVERROR(EAGAIN))
-            {     
+            {                 
                 mEncodedAVPacketBufferOffset =
                 (mEncodedAVPacketBufferOffset + 1) % mEncodedAudioFrameBuffer.size();
                 return;
@@ -105,11 +188,13 @@ public:
                 printAndThrowUnrecoverableError("avcodec_receive_packet(...)");
             else
             {
+                Medium::mOutputStatus = READY;
+                mLibavNeedsToBuffer = false;
                 AudioFrame<AudioCodec, audioSampleRate, audioChannels>& currFrame =
                 mEncodedAudioFrameBuffer[mEncodedAudioFrameBufferOffset];
                 
                 AVPacket& encodedPkt = currPkt; //mEncodedAudioPktBuffer[mEncodedAudioFrameBufferOffset];
-                
+
                 if (FFMPEGUtils::translateCodec<AudioCodec>() == AV_CODEC_ID_AAC)
                 {
                     if (!mAdtsHeaderWritten)
@@ -120,8 +205,10 @@ public:
                         mAdtsHeaderWritten = true;
                     }
                     mEncodedFrameForAdtsMuxer = &currFrame;
-                    int64_t pts = av_rescale_q(encodedPkt.pts, mAudioEncoderCodecContext->time_base,
-                                               mAdtsMuxerContext->streams[0]->time_base);
+                    mEncodedFrameForAdtsMuxer->mFactoryId = Medium::mId;
+                    mEncodedFrameForAdtsMuxer->mDistanceFromFactory =
+                    Medium::mDistanceFromInputAudioFrameFactory;
+                    int64_t pts = av_rescale_q(encodedPkt.pts, mAudioEncoderCodecContext->time_base, mAdtsMuxerContext->streams[0]->time_base);
 
                     encodedPkt.pts = encodedPkt.dts = pts;
                     if (av_write_frame(mAdtsMuxerContext, &encodedPkt) < 0)
@@ -135,7 +222,12 @@ public:
                 currFrame.setMonotonicTimestamp(mEncodingMonotonicTs[mEncodedAudioFrameBufferOffset]);
                 currFrame.setDateTimestamp(mEncodingDateTs[mEncodedAudioFrameBufferOffset]);
                 currFrame.mLibAVFlags = encodedPkt.flags;
-                //av_packet_unref(&encodedPkt);
+                currFrame.mLibAVSideData = encodedPkt.side_data;
+                currFrame.mLibAVSideDataElems = encodedPkt.side_data_elems;                
+                currFrame.mFactoryId = Medium::mId;
+                Medium::mInputAudioFrameFactoryId = rawAudioFrame.mFactoryId;                
+                Medium::mDistanceFromInputAudioFrameFactory = rawAudioFrame.mDistanceFromFactory + 1;
+                currFrame.mDistanceFromFactory = 0;
 
                 if (mEncodedAudioFrameBufferOffset + 1 == mEncodedAudioFrameBuffer.size())
                 {
@@ -149,9 +241,9 @@ public:
                 (mEncodedAVPacketBufferOffset + 1) % mEncodedAudioFrameBuffer.size();
 
                 if ((mRawInputLibAVFrameBufferOffset + periodSize) % bufferSize != 0)
-                {
+                {                  
                     copyRawAudioFrameDataToLibAVFrameData
-                    (0, rawAudioFrame, (mRawInputLibAVFrameBufferOffset + periodSize) % bufferSize);
+                    (0, rawAudioFrame, (mRawInputLibAVFrameBufferOffset + periodSize) % bufferSize, periodSize - (mRawInputLibAVFrameBufferOffset + periodSize) % bufferSize);
                 }
 
                 mFillingEncodedAudioFrame = false;
@@ -159,7 +251,7 @@ public:
         }
         else
         {
-            mFillingEncodedAudioFrame = true;
+            mFillingEncodedAudioFrame = true;        
             copyRawAudioFrameDataToLibAVFrameData(mRawInputLibAVFrameBufferOffset,
                                                   rawAudioFrame, periodSize);
         }
@@ -170,80 +262,68 @@ public:
     AudioFrameHolder<AudioCodec, audioSampleRate, audioChannels>&
     operator >> (AudioFrameHolder<AudioCodec, audioSampleRate, audioChannels>& audioFrameHolder)
     {
-        if (mMediaStatusInPipe == MEDIA_READY)
-            audioFrameHolder.mMediaStatusInPipe = MEDIA_READY;
-        else
-        {
-            audioFrameHolder.mMediaStatusInPipe = mMediaStatusInPipe;
-            mMediaStatusInPipe = MEDIA_READY;
-            return audioFrameHolder;
-        }
+        Medium& m = audioFrameHolder;
+        setDistanceFromInputAudioFrameFactory(m, 1);        
+        setInputAudioFrameFactoryId(m, mId);          
+        setStatusInPipe(m, READY);  
+        
         try
-        {
-            audioFrameHolder.hold(lastEncodedFrame());
-            audioFrameHolder.mMediaStatusInPipe = MEDIA_READY;
+        {           
+            audioFrameHolder.hold(lastEncodedFrame());          
         }
-        catch (const MediaException& mediaException)
+        catch (const MediumException& me)
         {
-            audioFrameHolder.mMediaStatusInPipe = mediaException.cause();
+            setStatusInPipe(m, NOT_READY);            
         }
         return audioFrameHolder;
     }
 
-    template <typename Container, typename VideoCodec, unsigned int width, unsigned int height >
-    FFMPEGAudioVideoMuxer<Container,
-                          VideoCodec, width, height,
+    template <typename Container, typename VideoCodec, typename width, typename height >
+    FFMPEGAudioVideoMuxer<Container, VideoCodec, width, height,
                           AudioCodec, audioSampleRate, audioChannels>&
     operator >>
-    (FFMPEGAudioVideoMuxer<Container,
-                           VideoCodec, width, height,
+    (FFMPEGAudioVideoMuxer<Container, VideoCodec, width, height,
                            AudioCodec, audioSampleRate, audioChannels>& audioVideoMuxer)
     {
-        if (mMediaStatusInPipe == MEDIA_READY)
-            audioVideoMuxer.mMediaStatusInPipe = MEDIA_READY;
-        else
-        {
-            audioVideoMuxer.mMediaStatusInPipe = mMediaStatusInPipe;
-            mMediaStatusInPipe = MEDIA_READY;
-            return audioVideoMuxer;
-        }
+        Medium& m = audioVideoMuxer;
+        setDistanceFromInputAudioFrameFactory(m, 1);        
+        setInputAudioFrameFactoryId(m, mId);        
+        setStatusInPipe(m, READY);
+        
         try
         {
-            audioVideoMuxer.takeMuxableFrame(lastEncodedFrame());
+            audioVideoMuxer.mux(lastEncodedFrame());            
         }
-        catch (const MediaException& mediaException)
+        catch (const MediumException& me)
         {
-            audioVideoMuxer.mMediaStatusInPipe = mediaException.cause();
+            setStatusInPipe(m, NOT_READY);            
         }
 
         return audioVideoMuxer;
     }
 
-    template <typename Container, typename VideoCodec, unsigned int width, unsigned int height>
+    template <typename Container, typename VideoCodec, typename width, typename height>
     HTTPAudioVideoStreamer<Container, VideoCodec, width, height,
                            AudioCodec, audioSampleRate, audioChannels>&
     operator >>
     (HTTPAudioVideoStreamer<Container, VideoCodec, width, height,
                             AudioCodec, audioSampleRate, audioChannels>& httpAudioVideoStreamer)
     {
-        if (mMediaStatusInPipe != MEDIA_READY)
+        Medium& m = httpAudioVideoStreamer;
+        setDistanceFromInputAudioFrameFactory(m, 1);        
+        setInputAudioFrameFactoryId(m, mId);        
+        setStatusInPipe(m, READY);
+        
+        try
         {
-            mMediaStatusInPipe = MEDIA_READY;
-            return httpAudioVideoStreamer;
+            httpAudioVideoStreamer.takeStreamableFrame(lastEncodedFrame());
+            httpAudioVideoStreamer.streamMuxedData();            
         }
-        else
+        catch (const MediumException& me)
         {
-            try
-            {
-                httpAudioVideoStreamer.takeStreamableFrame(lastEncodedFrame());
-                httpAudioVideoStreamer.streamMuxedData();
-            }
-            catch (const MediaException& mediaException)
-            {
-                // Do nothing, because the streamer is at the end of the pipe
-            }
+            setStatusInPipe(m, NOT_READY);            
         }
-
+        
         return httpAudioVideoStreamer;
     }
 
@@ -252,50 +332,45 @@ public:
     operator >>
     (HTTPAudioStreamer<Container, AudioCodec, audioSampleRate, audioChannels>& httpAudioStreamer)
     {
-        if (mMediaStatusInPipe != MEDIA_READY)
+        Medium& m = httpAudioStreamer;
+        setDistanceFromInputAudioFrameFactory(m, 1);        
+        setInputAudioFrameFactoryId(m, mId); 
+        setStatusInPipe(m, READY);
+        
+        try
         {
-            mMediaStatusInPipe = MEDIA_READY;
-            return httpAudioStreamer;
+            httpAudioStreamer.takeStreamableFrame(lastEncodedFrame());
+            httpAudioStreamer.streamMuxedData();           
         }
-        else
+        catch (const MediumException& me)
         {
-            try
-            {
-                httpAudioStreamer.takeStreamableFrame(lastEncodedFrame());
-                httpAudioStreamer.streamMuxedData();
-            }
-            catch (const MediaException& mediaException)
-            {
-                // Do nothing, because the streamer is at the end of the pipe
-            }
+            setStatusInPipe(m, NOT_READY);            
         }
 
         return httpAudioStreamer;
     }
 
-    template <typename Container, typename VideoCodec, unsigned int width, unsigned int height>
+    template <typename Container, typename VideoCodec, typename width, typename height>
     UDPAudioVideoStreamer<Container, VideoCodec, width, height,
                            AudioCodec, audioSampleRate, audioChannels>&
     operator >>
     (UDPAudioVideoStreamer<Container, VideoCodec, width, height,
                             AudioCodec, audioSampleRate, audioChannels>& udpAudioVideoStreamer)
     {
-        if (mMediaStatusInPipe != MEDIA_READY)
+        Medium& m = udpAudioVideoStreamer;
+        setDistanceFromInputAudioFrameFactory(m, 1);        
+        setInputAudioFrameFactoryId(m, mId);         
+        setStatusInPipe(m, READY);
+        
+        try
         {
-            mMediaStatusInPipe = MEDIA_READY;
-            return udpAudioVideoStreamer;
+            udpAudioVideoStreamer.takeStreamableFrame(lastEncodedFrame());
+            udpAudioVideoStreamer.streamMuxedData();
+        
         }
-        else
+        catch (const MediumException& mediaException)
         {
-            try
-            {
-                udpAudioVideoStreamer.takeStreamableFrame(lastEncodedFrame());
-                udpAudioVideoStreamer.streamMuxedData();
-            }
-            catch (const MediaException& mediaException)
-            {
-                // Do nothing, because the streamer is at the end of the pipe
-            }
+            setStatusInPipe(m, NOT_READY);            
         }
 
         return udpAudioVideoStreamer;
@@ -306,24 +381,21 @@ public:
     operator >>
     (UDPAudioStreamer<Container, AudioCodec, audioSampleRate, audioChannels>& udpAudioStreamer)
     {
-        if (mMediaStatusInPipe != MEDIA_READY)
+        Medium& m = udpAudioStreamer;
+        setDistanceFromInputAudioFrameFactory(m, 1);        
+        setInputAudioFrameFactoryId(m, mId); 
+        setStatusInPipe(m, READY);
+        
+        try
         {
-            mMediaStatusInPipe = MEDIA_READY;
-            return udpAudioStreamer;
+            udpAudioStreamer.takeStreamableFrame(lastEncodedFrame());
+            udpAudioStreamer.streamMuxedData();           
         }
-        else
+        catch (const MediumException& me)
         {
-            try
-            {
-                udpAudioStreamer.takeStreamableFrame(lastEncodedFrame());
-                udpAudioStreamer.streamMuxedData();
-            }
-            catch (const MediaException& mediaException)
-            {
-                // Do nothing, because the streamer is at the end of the pipe
-            }
+            setStatusInPipe(m, NOT_READY);            
         }
-
+        
         return udpAudioStreamer;
     }    
     
@@ -332,39 +404,40 @@ public:
     operator >>
     (FFMPEGAudioMuxer<Container, AudioCodec, audioSampleRate, audioChannels>& audioMuxer)
     {
-        if (mMediaStatusInPipe != MEDIA_READY)
+        Medium& m = audioMuxer;
+        setDistanceFromInputAudioFrameFactory(m, 1);        
+        setInputAudioFrameFactoryId(m, mId);         
+        setStatusInPipe(m, READY);
+        
+        try
         {
-            mMediaStatusInPipe = MEDIA_READY;
-            return audioMuxer;
+            audioMuxer.mux(lastEncodedFrame());           
         }
-        else
+        catch (const MediumException& mediaException)
         {
-            try
-            {
-                audioMuxer.takeMuxableFrame(lastEncodedFrame());
-            }
-            catch (const MediaException& mediaException)
-            {
-                // Do nothing, because the streamer is at the end of the pipe
-            }
+            setStatusInPipe(m, NOT_READY);            
         }
-
+        
         return audioMuxer;
     }
 
+    
     /*!
-     *  \exception MediaException(MEDIA_BUFFERING)
+     *  \exception MediumException
      */
     AudioFrame<AudioCodec, audioSampleRate, audioChannels>& encodedFrame(unsigned int bufferOffset)
     {
-        if (mFillingEncodedAudioFrame)
+        if (Medium::mStatusInPipe ==  NOT_READY)
+            throw MediumException(PIPE_NOT_READY);        
+        
+        if (mFillingEncodedAudioFrame || mLibavNeedsToBuffer)
         {
-            throw MediaException(MEDIA_BUFFERING);
+            throw MediumException(MEDIUM_BUFFERING);
         }
         if (mFillingEncodedAudioFrameBuffer &&
             (bufferOffset % mEncodedAudioFrameBuffer.size() >= mEncodedAudioFrameBufferOffset))
         {
-            throw MediaException(MEDIA_BUFFERING);
+            throw MediumException(MEDIUM_BUFFERING);
         }
         else
         {
@@ -373,12 +446,12 @@ public:
     }
 
     /*!
-     *  \exception MediaException(MEDIA_BUFFERING)
+     *  \exception MediumException
      */
     AudioFrame<AudioCodec, audioSampleRate, audioChannels>& lastEncodedFrame()
     {
-        return encodedFrame((mEncodedAudioFrameBuffer.size() + mEncodedAudioFrameBufferOffset - 1) %
-                            mEncodedAudioFrameBuffer.size());
+        return encodedFrame(
+        (mEncodedAudioFrameBuffer.size() + mEncodedAudioFrameBufferOffset - 1) % mEncodedAudioFrameBuffer.size());
     }
 
     unsigned int encodedFrameBufferIndex() const
@@ -391,13 +464,10 @@ public:
         return mEncodedAudioFrameBuffer.size();
     }
 
-    // TODO: private with friend converter, decoder, encoder
-    enum MediaStatus mMediaStatusInPipe;
-
 protected:
 
-    FFMPEGAudioEncoder():
-        mMediaStatusInPipe(MEDIA_NOT_READY),
+    FFMPEGAudioEncoder(const std::string& id = ""):
+        Medium(id),
         mEncodingCurrTime(0),
         mCounter(0),
         mEncodingStartTime(0),
@@ -405,10 +475,13 @@ protected:
         mFillingEncodedAudioFrame(true),
         mRawInputLibAVFrameBufferOffset(0),
         mEncodedAudioFrameBufferOffset(0),
-        mEncodedAVPacketBufferOffset(0)
+        mEncodedAVPacketBufferOffset(0),
+        mLibavNeedsToBuffer(true),
+        mFrameCounter(0)
     {
-        av_register_all();
-        avcodec_register_all();
+        //av_register_all();
+        //avcodec_register_all();
+        
         mAudioCodec = avcodec_find_encoder(FFMPEGUtils::translateCodec<AudioCodec>() );
         if (mAudioCodec == NULL)
             printAndThrowUnrecoverableError("avcodec_find_encoder(...)");
@@ -418,18 +491,16 @@ protected:
             printAndThrowUnrecoverableError("mAudioEncoderCodecContext =avcodec_alloc_context3(...)");
 
         mAudioEncoderCodecContext->sample_fmt = FFMPEGUtils::translateSampleFormat<PCMSoundFormat>();
-        mAudioEncoderCodecContext->sample_rate = audioSampleRate;
-        mAudioEncoderCodecContext->channels = audioChannels + 1;
-        mAudioEncoderCodecContext->channel_layout = av_get_default_channel_layout(audioChannels + 1);
-        mAudioEncoderCodecContext->time_base = (AVRational)
-        {
-            1, audioSampleRate
-        };
+        mAudioEncoderCodecContext->sample_rate = audioSampleRate::value;
+        mAudioEncoderCodecContext->channels = audioChannels::value + 1;
+        mAudioEncoderCodecContext->channel_layout = av_get_default_channel_layout(audioChannels::value + 1);
+        mAudioEncoderCodecContext->time_base = (AVRational){ 1, audioSampleRate::value };
         mAudioEncoderCodecContext->codec_type = AVMEDIA_TYPE_AUDIO ;
         if (FFMPEGUtils::translateCodec<AudioCodec>() == AV_CODEC_ID_AAC)
         {
             mAudioEncoderCodecContext->strict_std_compliance = FF_COMPLIANCE_EXPERIMENTAL;
         }
+        Medium::mInputStatus = READY;
     }
 
     void completeEncoderInitialization()
@@ -445,7 +516,7 @@ protected:
         mRawInputLibAVFrame->format         = mAudioEncoderCodecContext->sample_fmt;
         mRawInputLibAVFrame->channels       = mAudioEncoderCodecContext->channels;
         mRawInputLibAVFrame->channel_layout = mAudioEncoderCodecContext->channel_layout;
-        mRawInputLibAVFrame->sample_rate    = audioSampleRate;
+        mRawInputLibAVFrame->sample_rate    = audioSampleRate::value;
         // Allocate frame buffer
         if (av_frame_get_buffer(mRawInputLibAVFrame, 0) < 0)
             printAndThrowUnrecoverableError("av_frame_get_buffer(mRawInputLibAVFrame, 0)");
@@ -526,6 +597,10 @@ protected:
         }
     }
 
+    virtual void beforeEncodeCallback(){}
+    
+    virtual void afterEncodeCallback(){}      
+    
     AVCodecContext* mAudioEncoderCodecContext;
 
 private:
@@ -547,9 +622,9 @@ private:
 
     void copyRawAudioFrameDataToLibAVFrameData(unsigned int libAVFrameBufferOffset,
                                                const Planar2RawAudioFrame& rawAudioFrame,
-                                               unsigned int len)
+                                               unsigned int len, unsigned int rawAudioFrameOffs = 0)
     {
-        unsigned int channels = audioChannels + 1;
+        unsigned int channels = audioChannels::value + 1;
 
         memcpy(mRawInputLibAVFrame->data[0] + libAVFrameBufferOffset,
                rawAudioFrame.plane<0>(), len);
@@ -564,11 +639,13 @@ private:
         return rawAudioFrame.size();
     }
 
+
+    
     void copyRawAudioFrameDataToLibAVFrameData(unsigned int libAVFrameBufferOffset,
                                                const PackedRawAudioFrame& rawAudioFrame,
-                                               unsigned int len)
+                                               unsigned int len, unsigned int rawAudioFrameOffs = 0)
     {
-        memcpy(mRawInputLibAVFrame->data[0] + libAVFrameBufferOffset, rawAudioFrame.data(), len);
+        memcpy(mRawInputLibAVFrame->data[0] + libAVFrameBufferOffset, &rawAudioFrame.data()[0+rawAudioFrameOffs], len);   
     }
 
     void fillEncodedAudioFrame(EncodedAudioFrame<AudioCodec>& encodedAudioFrame,
@@ -625,12 +702,14 @@ private:
 
         audioEncoder->mEncodedFrameForAdtsMuxer->assignDataSharedPtr(mAudioData);
         audioEncoder->mEncodedFrameForAdtsMuxer->setSize(chunkSize);
-
+        
         return chunkSize;
 
     }
 
     AudioFrame<AudioCodec, audioSampleRate, audioChannels>* mEncodedFrameForAdtsMuxer;
+    bool mLibavNeedsToBuffer;
+    long mFrameCounter;
 
 };
 

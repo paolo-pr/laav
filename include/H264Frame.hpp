@@ -25,7 +25,7 @@ namespace laav
 
 class H264 {};
 
-template <unsigned int width_, unsigned int height_>
+template <typename width_, typename height_>
 class VideoFrame<H264, width_, height_> :
 public VideoFrameBase<width_, height_>,
 public EncodedVideoFrame
@@ -34,7 +34,7 @@ public EncodedVideoFrame
 public:
 
     VideoFrame<H264, width_, height_>():
-        EncodedVideoFrame(width_, height_)
+        EncodedVideoFrame(width_::value, height_::value)
     {
     }
 

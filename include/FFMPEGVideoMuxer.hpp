@@ -20,38 +20,30 @@
 #ifndef FFMPEGMuxerVideoImpl_HPP_INCLUDED
 #define FFMPEGMuxerVideoImpl_HPP_INCLUDED
 
+#include "FFMPEGVideoEncoder.hpp"
 #include "FFMPEGMuxer.hpp"
 
 namespace laav
 {
 
 // DIAMOND pattern
-template <typename Container, typename VideoCodecOrFormat, unsigned int width, unsigned int height>
+template <typename Container, typename VideoCodecOrFormat, typename width, typename height>
 class FFMPEGMuxerVideoImpl : public virtual FFMPEGMuxerCommonImpl<Container>
 {
 
 protected:
 
-    FFMPEGMuxerVideoImpl(bool startMuxingSoon = false)
+    FFMPEGMuxerVideoImpl(const std::string& id = "") :
+        FFMPEGMuxerCommonImpl<Container>(id)
     {
+        
+        Medium::mId = id;        
+          
         mVideoStream = avformat_new_stream(FFMPEGMuxerCommonImpl<Container>::mMuxerContext, NULL);
         if (!mVideoStream)
             printAndThrowUnrecoverableError("mVideoStream = avformat_new_stream(...)");
 
         mVideoStream->id = FFMPEGMuxerCommonImpl<Container>::mMuxerContext->nb_streams - 1;
-        AVCodec* videoCodec = avcodec_find_encoder(FFMPEGUtils::translateCodec<VideoCodecOrFormat>());
-        if (!videoCodec)
-            printAndThrowUnrecoverableError("AVCodec* videoCodec = avcodec_find_encoder(...)");
-
-        mVideoCodecContext = avcodec_alloc_context3(videoCodec);
-        if (!mVideoCodecContext)
-            printAndThrowUnrecoverableError("mVideoCodecContext = avcodec_alloc_context3(...)");
-
-        mVideoCodecContext->codec_id = FFMPEGUtils::translateCodec<VideoCodecOrFormat>();;
-        mVideoCodecContext->width = width;
-        mVideoCodecContext->height = height;
-        mVideoCodecContext->time_base = AV_TIME_BASE_Q;
-        avcodec_parameters_from_context(mVideoStream->codecpar, mVideoCodecContext);
 
         unsigned int i;
         for (i = 1; i < encodedVideoFrameBufferSize; i++)
@@ -65,30 +57,45 @@ protected:
             av_init_packet(&this->mVideoAVPktsToMux[i]);
             this->mVideoAVPktsToMux[i].pts = AV_NOPTS_VALUE;
         }
-
-        if (startMuxingSoon)
-            this->startMuxing();
-
+                
     }
 
     ~FFMPEGMuxerVideoImpl()
     {
-        avcodec_free_context(&mVideoCodecContext);
     }
 
     /*!
-     *  \exception MediaException(MEDIA_NO_DATA)
+     *  \exception MediumException
      */
-    void takeMuxableFrame(const VideoFrame<VideoCodecOrFormat, width, height>& videoFrameToMux)
+    void mux(const VideoFrame<VideoCodecOrFormat, width, height>& videoFrameToMux)
     {
-        if (isFrameEmpty(videoFrameToMux))
-            throw MediaException(MEDIA_NO_DATA);
+        
+        if (videoFrameToMux.isEmpty())
+            throw MediumException(INPUT_EMPTY);
 
+        Medium::mInputVideoFrameFactoryId = videoFrameToMux.mFactoryId;
+        Medium::mDistanceFromInputVideoFrameFactory = videoFrameToMux.mDistanceFromFactory + 1;         
+        
+        if (Medium::mInputStatus == PAUSED)
+            throw MediumException(MEDIUM_PAUSED);         
+
+        if (Medium::mStatusInPipe == NOT_READY)
+            throw MediumException(PIPE_NOT_READY);         
+        
+        if (videoFrameToMux.mLibAVFlags & AV_PKT_FLAG_KEY || std::is_same<VideoCodecOrFormat, MJPEG>())
+            FFMPEGMuxerCommonImpl<Container>::mMuxedChunksHelper.gotVideoKeyFrameForRec = true;
+        
+        if (FFMPEGMuxerCommonImpl<Container>::isRecording() &&
+            FFMPEGMuxerCommonImpl<Container>::mMuxedChunksHelper.needsVideoKeyFrame &&
+            !FFMPEGMuxerCommonImpl<Container>::mMuxedChunksHelper.gotVideoKeyFrameForRec)
+        {
+            throw MediumException(INPUT_NOT_READY);
+        }
+        
         FFMPEGMuxerCommonImpl<Container>::mVideoReady = true;
 
         int64_t pts;
-        pts = av_rescale_q(videoFrameToMux.monotonicTimestamp(), mVideoCodecContext->time_base,
-                           this->mMuxerContext->streams[this->mVideoStreamIndex]->time_base);
+        pts = av_rescale_q(videoFrameToMux.monotonicTimestamp(), AV_TIME_BASE_Q, this->mMuxerContext->streams[this->mVideoStreamIndex]->time_base);
 
         this->mVideoAVPktsToMux[this->mVideoAVPktsToMuxOffset].pts = pts;
         this->mVideoAVPktsToMux[this->mVideoAVPktsToMuxOffset].dts = pts;
@@ -101,7 +108,6 @@ protected:
 
         this->mVideoAVPktsToMux[this->mVideoAVPktsToMuxOffset].size = videoFrameToMux.size();
         this->mVideoAVPktsToMux[this->mVideoAVPktsToMuxOffset].flags = videoFrameToMux.mLibAVFlags;
-        // TODO: is this needed for audio too?
         if (this->mVideoAVPktsToMux[this->mVideoAVPktsToMuxOffset].side_data)
         {
             this->mVideoAVPktsToMux[this->mVideoAVPktsToMuxOffset].side_data =
@@ -114,91 +120,127 @@ protected:
         this->mVideoAVPktsToMuxOffset =
         (this->mVideoAVPktsToMuxOffset + 1) % this->mVideoAVPktsToMux.size();
 
-        if (this->mDoMux)
+        //if (this->mDoMux)
         {
-            this->mMuxedChunks.newGroupOfChunks = false;
+            this->mMuxedChunksHelper.newGroupOfChunks = false;
             this->muxNextUsefulFrameFromBuffer(true);
         }
     }
-
-private:
-
-    bool isFrameEmpty(const PackedRawVideoFrame& videoFrame) const
+    
+    void setParamsFromEmbeddedVideoCodecContext()
     {
-        return videoFrame.size() == 0;
+        AVCodec* videoCodec = avcodec_find_encoder(FFMPEGUtils::translateCodec<VideoCodecOrFormat>());
+        if (!videoCodec)
+            printAndThrowUnrecoverableError("AVCodec* videoCodec = avcodec_find_encoder(...)");
+
+        AVCodecContext* embeddedVideoCodecContext = avcodec_alloc_context3(videoCodec);
+        if (!embeddedVideoCodecContext)
+            printAndThrowUnrecoverableError("embeddedVideoCodecContext = avcodec_alloc_context3(...)");        
+              
+        AVStream* videoStream = FFMPEGMuxerVideoImpl<Container, VideoCodecOrFormat, width, height>::mVideoStream;
+            
+        embeddedVideoCodecContext->codec_id = FFMPEGUtils::translateCodec<VideoCodecOrFormat>();;
+        embeddedVideoCodecContext->width = width::value;
+        embeddedVideoCodecContext->height = height::value;
+        embeddedVideoCodecContext->codec_type = AVMEDIA_TYPE_VIDEO;
+        embeddedVideoCodecContext->time_base = AV_TIME_BASE_Q;
+        
+        avcodec_parameters_from_context(videoStream->codecpar, embeddedVideoCodecContext);        
+        avcodec_free_context(&embeddedVideoCodecContext);        
     }
 
-    bool isFrameEmpty(const Planar3RawVideoFrame& videoFrame) const
-    {
-        return videoFrame.size<0>() == 0;
-    }
-
-    bool isFrameEmpty(const EncodedVideoFrame& videoFrame) const
-    {
-        return videoFrame.size() == 0;
-    }
-
-    AVStream* mVideoStream;
-    AVCodecContext* mVideoCodecContext0;
-    AVCodecContext* mVideoCodecContext;
+    AVStream* mVideoStream;    
 
 };
 
-template <typename Container, typename VideoCodecOrFormat, unsigned int width, unsigned int height>
+template <typename Container, typename VideoCodecOrFormat, typename width, typename height>
 class FFMPEGVideoMuxer : public FFMPEGMuxerVideoImpl<Container, VideoCodecOrFormat, width, height>
 {
+    
 public:
 
-    FFMPEGVideoMuxer(bool startMuxingSoon = false) :
-    FFMPEGMuxerVideoImpl<Container, VideoCodecOrFormat, width, height>(startMuxingSoon)
+    FFMPEGVideoMuxer(const std::string& id = "") :
+    FFMPEGMuxerVideoImpl<Container, VideoCodecOrFormat, width, height>(id)
     {
-        this->mMuxVideo = true;
-        FFMPEGMuxerCommonImpl<Container>::mVideoStreamIndex = 0;
-        FFMPEGMuxerCommonImpl<Container>::completeMuxerInitialization();
-        auto freeNothing = [](unsigned char* buffer) {  };
-        mMuxedVideoChunks.resize(FFMPEGMuxerCommonImpl<Container>::mMuxedChunks.data.size());
-        unsigned int n;
-        for (n = 0; n < mMuxedVideoChunks.size(); n++)
-        {
-            ShareableMuxedData shMuxedData(this->mMuxedChunks.data[n].ptr, freeNothing);
-            mMuxedVideoChunks[n].assignDataSharedPtr(shMuxedData);
-        }
+        static_assert(! (std::is_same<Container, MATROSKA>::value && std::is_same<VideoCodecOrFormat, H264>::value), 
+                      "Please pass the H264 Encoder to the constructor!");
+        
+        FFMPEGMuxerVideoImpl<Container, VideoCodecOrFormat, width, height>::setParamsFromEmbeddedVideoCodecContext();
+        ctorCommon();
     }
 
-    void takeMuxableFrame(const VideoFrame<VideoCodecOrFormat, width, height>& videoFrameToMux)
+    template <typename RawVideoFrameFormat>
+    FFMPEGVideoMuxer(const FFMPEGVideoEncoder<RawVideoFrameFormat, VideoCodecOrFormat, width, height>& vEnc, const std::string& id = "") :
+    FFMPEGMuxerVideoImpl<Container, VideoCodecOrFormat, width, height>(id)
     {
-        FFMPEGMuxerVideoImpl<Container,
-                             VideoCodecOrFormat, width, height>::takeMuxableFrame(videoFrameToMux);
+        // they will be freed by the avformat cleanup stuff
+        avcodec_parameters_from_context(FFMPEGMuxerVideoImpl<Container, VideoCodecOrFormat, width, height>::mVideoStream->codecpar, 
+                                        vEnc.mVideoEncoderCodecContextOutOfBand);       
+        ctorCommon();
     }
-
+    
     /*!
-     *  \exception MediaException(MEDIA_NO_DATA)
+     *  \exception MediumException
+     */        
+    void mux(const VideoFrame<VideoCodecOrFormat, width, height>& videoFrameToMux)
+    {        
+        FFMPEGMuxerVideoImpl<Container, VideoCodecOrFormat, 
+                             width, height>::mux(videoFrameToMux);
+    }    
+    
+    /*!
+     *  \exception MediumException
      */
     const std::vector<MuxedVideoData<Container, VideoCodecOrFormat, width, height> >&
     muxedVideoChunks()
     {
-        if (this->mMuxedChunks.newGroupOfChunks)
+        if (Medium::mInputStatus == PAUSED)
+            throw MediumException(MEDIUM_PAUSED);        
+
+        if (Medium::mStatusInPipe ==  NOT_READY)
+            throw MediumException(PIPE_NOT_READY);         
+        
+        if (this->mMuxedChunksHelper.newGroupOfChunks)
         {
             unsigned int n;
-            for (n = 0; n < FFMPEGMuxerCommonImpl<Container>::mMuxedChunks.offset; n++)
+            for (n = 0; n < FFMPEGMuxerCommonImpl<Container>::mMuxedChunksHelper.offset; n++)
             {
-                mMuxedVideoChunks[n].setSize(this->mMuxedChunks.data[n].size);
+                mMuxedVideoChunks[n].setSize(this->mMuxedChunksHelper.data[n].size);
             }
+            Medium::mOutputStatus = READY;
             return mMuxedVideoChunks;
         }
         else
         {
-            throw MediaException(MEDIA_NO_DATA);
+            Medium::mOutputStatus = NOT_READY;
+            throw MediumException(OUTPUT_NOT_READY);
         }
     }
 
     unsigned int muxedVideoChunksOffset() const
     {
-        return FFMPEGMuxerCommonImpl<Container>::mMuxedChunks.offset;
+        return FFMPEGMuxerCommonImpl<Container>::mMuxedChunksHelper.offset;
     }
 
 private:
-
+    
+    void ctorCommon()
+    {
+        this->mMuxVideo = true;
+        FFMPEGMuxerCommonImpl<Container>::mVideoStreamIndex = 0;
+        FFMPEGMuxerCommonImpl<Container>::mMuxedChunksHelper.needsVideoKeyFrame = true; 
+        FFMPEGMuxerCommonImpl<Container>::completeMuxerInitialization();
+        auto freeNothing = [](unsigned char* buffer) {  };
+        mMuxedVideoChunks.resize(FFMPEGMuxerCommonImpl<Container>::mMuxedChunksHelper.data.size());
+        unsigned int n;
+        for (n = 0; n < mMuxedVideoChunks.size(); n++)
+        {
+            ShareableMuxedData shMuxedData(this->mMuxedChunksHelper.data[n].ptr, freeNothing);
+            mMuxedVideoChunks[n].assignDataSharedPtr(shMuxedData);
+        }
+        Medium::mInputStatus = READY;    
+    }
+    
     std::vector<MuxedVideoData<Container, VideoCodecOrFormat, width, height> > mMuxedVideoChunks;
 
 };

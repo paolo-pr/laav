@@ -35,17 +35,17 @@ extern "C"
 namespace laav
 {
 
-template <unsigned int width, unsigned int height>
-class FFMPEGMJPEGDecoder
+template <typename width, typename height>
+class FFMPEGMJPEGDecoder : public Medium
 {
 
 public:
 
-    FFMPEGMJPEGDecoder() :
-        mMediaStatusInPipe(MEDIA_NOT_READY)
+    FFMPEGMJPEGDecoder(const std::string& id = "") :
+        Medium(id)
     {
-        av_register_all();
-        avcodec_register_all();
+        //av_register_all();
+        //avcodec_register_all();
 
         mVideoCodec = avcodec_find_decoder(AV_CODEC_ID_MJPEG);
         if (!mVideoCodec)
@@ -55,8 +55,8 @@ public:
         if (!mVideoDecoderCodecContext)
             printAndThrowUnrecoverableError("");
         mVideoDecoderCodecContext->codec_id = AV_CODEC_ID_MJPEG;
-        mVideoDecoderCodecContext->width = width;
-        mVideoDecoderCodecContext->height = height;
+        mVideoDecoderCodecContext->width = width::value;
+        mVideoDecoderCodecContext->height = height::value;
         mVideoDecoderCodecContext->time_base = AV_TIME_BASE_Q;
         mVideoDecoderCodecContext->color_range = AVCOL_RANGE_JPEG;
 
@@ -68,6 +68,8 @@ public:
             printAndThrowUnrecoverableError("mDecodedLibAVFrame = av_frame_alloc()");
 
         setDecodedFrameSizes(mDecodedVideoFrame);
+        
+        Medium::mInputStatus = READY;
     }
 
     ~FFMPEGMJPEGDecoder()
@@ -77,22 +79,61 @@ public:
     }
 
     /*!
-     *  \exception MediaException(MEDIA_NO_DATA)
+     *  \exception MediumException
      */
-    VideoFrame<YUV422_PLANAR, width, height>& decode(const EncodedVideoFrame& encodedVideoFrame)
+    template <typename EncodedVideoFrame>
+    VideoFrame<YUV422_PLANAR, width, height>& decode(EncodedVideoFrame& encodedVideoFrame)
     {
+        Medium::mOutputStatus = NOT_READY;
+
+        if (encodedVideoFrame.isEmpty())
+            throw MediumException(INPUT_EMPTY);
+
+        Medium::mDistanceFromInputVideoFrameFactory = encodedVideoFrame.mDistanceFromFactory + 1;        
+        Medium::mInputVideoFrameFactoryId = encodedVideoFrame.mFactoryId;        
+        mDecodedVideoFrame.mFactoryId = Medium::mId;         
+        mDecodedVideoFrame.mDistanceFromFactory = 0;
+
+        if (Medium::mStatusInPipe ==  NOT_READY)
+            throw MediumException(PIPE_NOT_READY);         
+        
+        if (Medium::mInputStatus ==  PAUSED)
+            throw MediumException(MEDIUM_PAUSED);
+        
         AVPacket tempPkt;
         av_init_packet(&tempPkt);
 
         tempPkt.data = (uint8_t* )encodedVideoFrame.data();
         tempPkt.size = encodedVideoFrame.size();
 
+        // This block prevents a continuous warning from libavcodec (from 3.3.3 version)
+        // when an APP field with uncorrect length is found in the MJPEG 
+        // header. Some USB camera (misteriously?) put more than one APP field in the
+        // header, with bad (are they really bad? libavcodec says that they should be < 6)
+        // lengths...
+        unsigned i = 0;
+        while (i < encodedVideoFrame.size() - 3)
+        {
+            // APP field found
+            if (tempPkt.data[i] == 0xff &&
+                (tempPkt.data[i+1] >= 0xe0 && tempPkt.data[i+1] <= 0xef))
+            {
+                // bad length found
+                if ( (tempPkt.data[i+3] | tempPkt.data[i+2] << 8 ) < 6)
+                    tempPkt.data[i+1] = 0;
+            }
+            
+            if (tempPkt.data[i] == 0xff && tempPkt.data[i+1] == 0xda ) 
+                break; // // ff da: SOS (start of scanning) field found
+            i++;    
+        }
+       
         int ret = avcodec_send_packet(mVideoDecoderCodecContext, &tempPkt);
         // TODO separate send and receive errors? Doesn't seem necessary here...
         ret = avcodec_receive_frame(mVideoDecoderCodecContext, mDecodedLibAVFrame);
         if (ret != 0)
         {
-            throw MediaException(MEDIA_NO_DATA);
+            throw MediumException(OUTPUT_NOT_READY);
         }
 
         auto freeNothing = [](unsigned char* buffer) {  };
@@ -103,6 +144,7 @@ public:
         fillDecodedFrame(mDecodedVideoFrame);
         av_packet_unref(&tempPkt);
 
+        Medium::mOutputStatus = READY;
         return mDecodedVideoFrame;
     }
 
@@ -111,49 +153,42 @@ public:
     operator >>
     (VideoEncoder<YUV422_PLANAR, EncodedVideoFrameCodec_, width, height>& videoEncoder)
     {
-        if (mMediaStatusInPipe == MEDIA_READY)
-            videoEncoder.mMediaStatusInPipe = MEDIA_READY;
-        else
-        {
-            videoEncoder.mMediaStatusInPipe = mMediaStatusInPipe;
-            mMediaStatusInPipe = MEDIA_READY;
-            return videoEncoder;
-        }
+        Medium& m = videoEncoder;
+        setDistanceFromInputVideoFrameFactory(m, 1);        
+        setInputVideoFrameFactoryId(m, mId);         
+        setStatusInPipe(m, mStatusInPipe); 
+        
         try
         {
-            videoEncoder.encode(mDecodedVideoFrame);
+            videoEncoder.encode(mDecodedVideoFrame);           
         }
-        catch (const MediaException& mediaException)
+        catch (const MediumException& mediumException)
         {
-            videoEncoder.mMediaStatusInPipe = mediaException.cause();
+            setStatusInPipe(m, NOT_READY);            
         }
         return videoEncoder;
     }
 
-    template <typename ConvertedVideoFrameFormat, unsigned int outputWidth, unsigned int outputheight>
+    template <typename ConvertedVideoFrameFormat, typename outputWidth, typename outputheight>
     FFMPEGVideoConverter<YUV422_PLANAR, width, height,
                          ConvertedVideoFrameFormat, outputWidth, outputheight >&
     operator >>
     (FFMPEGVideoConverter<YUV422_PLANAR, width, height,
                           ConvertedVideoFrameFormat, outputWidth, outputheight >& videoConverter)
     {
-        if (mMediaStatusInPipe == MEDIA_READY)
-            videoConverter.mMediaStatusInPipe = MEDIA_READY;
-        else
-        {
-            videoConverter.mMediaStatusInPipe = mMediaStatusInPipe;
-            mMediaStatusInPipe = MEDIA_READY;
-            return videoConverter;
-        }
+        Medium& m = videoConverter;
+        setDistanceFromInputVideoFrameFactory(m, 1);        
+        setInputVideoFrameFactoryId(m, mId); 
+        setStatusInPipe(m, mStatusInPipe); 
+        
         try
         {
             videoConverter.convert(mDecodedVideoFrame);
-            // TODO: is the following line really necessary?
-            videoConverter.mMediaStatusInPipe = MEDIA_READY;
+            
         }
-        catch (const MediaException& mediaException)
+        catch (const MediumException& mediumException)
         {
-            videoConverter.mMediaStatusInPipe = mediaException.cause();
+            setStatusInPipe(m, NOT_READY);            
         }
         return videoConverter;
     }
@@ -162,27 +197,22 @@ public:
     operator >>
     (VideoFrameHolder<YUV422_PLANAR, width, height>& videoFrameHolder)
     {
-        if (mMediaStatusInPipe == MEDIA_READY)
-            videoFrameHolder.mMediaStatusInPipe = MEDIA_READY;
-        else
-        {
-            videoFrameHolder.mMediaStatusInPipe = mMediaStatusInPipe;
-            mMediaStatusInPipe = MEDIA_READY;
-            return videoFrameHolder;
-        }
+        Medium& m = videoFrameHolder;
+        setDistanceFromInputVideoFrameFactory(m, 1);        
+        setInputVideoFrameFactoryId(m, mId);       
+        setStatusInPipe(m, mStatusInPipe); 
+        
         try
         {
             videoFrameHolder.hold(mDecodedVideoFrame);
-            videoFrameHolder.mMediaStatusInPipe = MEDIA_READY;
+               
         }
-        catch (const MediaException& mediaException)
+        catch (const MediumException& mediumException)
         {
-            videoFrameHolder.mMediaStatusInPipe = mediaException.cause();
+            setStatusInPipe(m, NOT_READY);            
         }
         return videoFrameHolder;
     }
-
-    enum MediaStatus mMediaStatusInPipe;
 
 private:
 
@@ -195,12 +225,12 @@ private:
 
     void setDecodedFrameSizes(Planar3RawVideoFrame& decodedFrame)
     {
-        int size0 = av_image_get_linesize(AV_PIX_FMT_YUVJ422P, width, 0);
-        int size1 = av_image_get_linesize(AV_PIX_FMT_YUVJ422P, width, 1);
-        int size2 = av_image_get_linesize(AV_PIX_FMT_YUVJ422P, width, 2);
-        decodedFrame.setSize<0>(size0 * height);
-        decodedFrame.setSize<1>(size1 * height);
-        decodedFrame.setSize<2>(size2 * height);
+        int size0 = av_image_get_linesize(AV_PIX_FMT_YUV422P, width::value, 0);
+        int size1 = av_image_get_linesize(AV_PIX_FMT_YUV422P, width::value, 1);
+        int size2 = av_image_get_linesize(AV_PIX_FMT_YUV422P, width::value, 2);
+        decodedFrame.setSize<0>(size0 * height::value);
+        decodedFrame.setSize<1>(size1 * height::value);
+        decodedFrame.setSize<2>(size2 * height::value);
     }
 
     AVCodecContext* mVideoDecoderCodecContext;

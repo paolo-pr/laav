@@ -35,37 +35,37 @@ namespace laav
 {
 
 template <typename InputVideoFrameFormat,
-          unsigned int inputWidth,
-          unsigned int inputHeigth,
+          typename inputWidth,
+          typename inputHeigth,
           typename ConvertedVideoFrameFormat,
-          unsigned int outputWidth,
-          unsigned int outputHeigth>
-class FFMPEGVideoConverter
+          typename outputWidth,
+          typename outputHeigth>
+class FFMPEGVideoConverter : public Medium
 {
           
 public:
 
-    FFMPEGVideoConverter():
-        mMediaStatusInPipe(MEDIA_NOT_READY)
+    FFMPEGVideoConverter(const std::string& id = ""):
+        Medium(id)
     {
-        static_assert( ((inputWidth >= outputWidth) && (inputHeigth >= outputHeigth)),
-                       "(inputWidth <= outputWidth) && (inputHeigth <= outputHeigth) == false");
+        static_assert( ((inputWidth::value >= outputWidth::value) && (inputHeigth::value >= outputHeigth::value)),
+                       "(inputWidth::value <= outputWidth::value) && (inputHeigth::value <= outputHeigth::value) == false");
         // TODO add other static asserts for not allowed conversions
         // TODO static assert if FFMPEGUtils::translatePixelFormat fails for input and/or output
         AVPixelFormat convFmt = FFMPEGUtils::translatePixelFormat<ConvertedVideoFrameFormat>();
         AVPixelFormat inFmt   = FFMPEGUtils::translatePixelFormat<InputVideoFrameFormat>();
 
-        av_register_all();
+        //av_register_all();
         mInputLibAVFrame = av_frame_alloc();
 
         if (!mInputLibAVFrame)
             printAndThrowUnrecoverableError("(mInputLibAVFrame = av_frame_alloc())");
 
         mInputLibAVFrame->format = FFMPEGUtils::translatePixelFormat<InputVideoFrameFormat>();
-        mInputLibAVFrame->width  = inputWidth;
-        mInputLibAVFrame->height = inputHeigth;
+        mInputLibAVFrame->width  = inputWidth::value;
+        mInputLibAVFrame->height = inputHeigth::value;
         if (av_image_alloc(mInputLibAVFrame->data, mInputLibAVFrame->linesize,
-                           inputWidth, inputHeigth,
+                           inputWidth::value, inputHeigth::value,
                            FFMPEGUtils::translatePixelFormat<InputVideoFrameFormat>(), 1) < 0)
             printAndThrowUnrecoverableError("av_image_alloc(...)");
         av_freep(&mInputLibAVFrame->data[0]);
@@ -75,8 +75,8 @@ public:
         if (!mInputCodecContext)
             printAndThrowUnrecoverableError("mInputCodecContext = avcodec_alloc_context3(...)");
 
-        mInputCodecContext->width = inputWidth;
-        mInputCodecContext->height = inputHeigth;
+        mInputCodecContext->width = inputWidth::value;
+        mInputCodecContext->height = inputHeigth::value;
         mInputCodecContext->pix_fmt = inFmt;
         if (avcodec_open2(mInputCodecContext, rawCodecInput, NULL) < 0)
             printAndThrowUnrecoverableError("avcodec_open2(...)");
@@ -86,8 +86,8 @@ public:
         if (!mOutputCodecContext)
             printAndThrowUnrecoverableError("(mOutputCodecContext = avcodec_alloc_context3(...))");
 
-        mOutputCodecContext->width = outputWidth;
-        mOutputCodecContext->height = outputHeigth;
+        mOutputCodecContext->width = outputWidth::value;
+        mOutputCodecContext->height = outputHeigth::value;
         mOutputCodecContext->pix_fmt = convFmt;
         if (avcodec_open2(mOutputCodecContext, rawCodecOutput, NULL) < 0)
             printAndThrowUnrecoverableError("avcodec_open2(...)");
@@ -97,10 +97,10 @@ public:
             printAndThrowUnrecoverableError("(mConvertedLibAVFrame = av_frame_alloc())");
 
         mConvertedLibAVFrame->format = convFmt;
-        mConvertedLibAVFrame->width  = outputWidth;
-        mConvertedLibAVFrame->height = outputHeigth;
+        mConvertedLibAVFrame->width  = outputWidth::value;
+        mConvertedLibAVFrame->height = outputHeigth::value;
         if (av_image_alloc(mConvertedLibAVFrame->data, mConvertedLibAVFrame->linesize,
-                           outputWidth, outputHeigth, convFmt, 1) < 0)
+                           outputWidth::value, outputHeigth::value, convFmt, 1) < 0)
             printAndThrowUnrecoverableError("av_image_alloc(...)");
 
         auto freeLibAVFrameBuffer = [](unsigned char* buffer)
@@ -120,25 +120,43 @@ public:
         mConvertedLibAVFrameData2 =
         ShareableVideoFrameData(mConvertedLibAVFrame->data[2], freeNothing);
 
-        mSwscaleContext = sws_getContext(inputWidth, inputHeigth, inFmt, outputWidth, outputHeigth,
+        mSwscaleContext = sws_getContext(inputWidth::value, inputHeigth::value, inFmt, 
+                                         outputWidth::value, outputHeigth::value,
                                          convFmt, SWS_BILINEAR, NULL, NULL, NULL);
         if (!mSwscaleContext)
             printAndThrowUnrecoverableError("(mSwscaleContext = sws_getContext(...");
         mapConvertedFrameToLibAVFrame(mConvertedVideoFrame);
+        
+        Medium::mInputStatus = READY;
     }
 
     /*!
-     *  \exception MediaException(MEDIA_NO_DATA)
+     *  \exception MediumException
      */
     VideoFrame<ConvertedVideoFrameFormat, outputWidth, outputHeigth>&
     convert(const VideoFrame<InputVideoFrameFormat, inputWidth, inputHeigth>& inputVideoFrame)
     {
-        if (isFrameEmpty(inputVideoFrame))
-            throw MediaException(MEDIA_NO_DATA);
+        Medium::mOutputStatus = NOT_READY;
+
+        if (inputVideoFrame.isEmpty())
+            throw MediumException(INPUT_EMPTY);
+
+        Medium::mInputVideoFrameFactoryId = inputVideoFrame.mFactoryId;
+        Medium::mDistanceFromInputVideoFrameFactory = inputVideoFrame.mDistanceFromFactory + 1;        
+
+        if (Medium::mStatusInPipe ==  NOT_READY)
+            throw MediumException(PIPE_NOT_READY);
+        
+        if (Medium::mInputStatus ==  PAUSED)
+            throw MediumException(MEDIUM_PAUSED);
 
         specializedConvert(inputVideoFrame);
         mConvertedVideoFrame.setTimestampsToNow();
         setSizeOfConvertedFrame(mConvertedVideoFrame);
+        mConvertedVideoFrame.mFactoryId = Medium::mId;
+        mConvertedVideoFrame.mDistanceFromFactory = 0;
+        Medium::mOutputStatus = READY;
+        
         return mConvertedVideoFrame;
     }
 
@@ -155,50 +173,43 @@ public:
     operator >>
     (VideoFrameHolder<ConvertedVideoFrameFormat, outputWidth, outputHeigth>& videoFrameHolder)
     {
-        if (mMediaStatusInPipe == MEDIA_READY)
-            videoFrameHolder.mMediaStatusInPipe = MEDIA_READY;
-        else
-        {
-            videoFrameHolder.mMediaStatusInPipe = mMediaStatusInPipe;
-            mMediaStatusInPipe = MEDIA_READY;
-            return videoFrameHolder;
-        }
+        Medium& m = videoFrameHolder;
+        setDistanceFromInputVideoFrameFactory(m, 1);        
+        setInputVideoFrameFactoryId(m, mId); 
+        setStatusInPipe(m, mStatusInPipe);
+        
         try
         {
-            videoFrameHolder.hold(mConvertedVideoFrame);
-            videoFrameHolder.mMediaStatusInPipe = MEDIA_READY;
+            videoFrameHolder.hold(mConvertedVideoFrame);          
         }
-        catch (const MediaException& mediaException)
+        catch (const MediumException& mediumException)
         {
-            videoFrameHolder.mMediaStatusInPipe = mediaException.cause();
+            setStatusInPipe(m, NOT_READY);            
         }
         return videoFrameHolder;
     }
 
     template <typename ReConvertedVideoFrameFormat,
-              unsigned int outputWidth2,
-              unsigned int outputHeigth2>
+              typename outputWidth2,
+              typename outputHeigth2>
     FFMPEGVideoConverter<ConvertedVideoFrameFormat, outputWidth, outputHeigth,
                          ReConvertedVideoFrameFormat, outputWidth2, outputHeigth2>&
     operator >>
     (FFMPEGVideoConverter<ConvertedVideoFrameFormat, outputWidth, outputHeigth,
                           ReConvertedVideoFrameFormat, outputWidth2, outputHeigth2>& videoReConverter)
     {
-        if (mMediaStatusInPipe == MEDIA_READY)
-            videoReConverter.mMediaStatusInPipe = MEDIA_READY;
-        else
-        {
-            videoReConverter.mMediaStatusInPipe = mMediaStatusInPipe;
-            mMediaStatusInPipe = MEDIA_READY;
-            return videoReConverter;
-        }
+        Medium& m = videoReConverter;
+        setDistanceFromInputVideoFrameFactory(m, 1);        
+        setInputVideoFrameFactoryId(m, mId); 
+        setStatusInPipe(m, mStatusInPipe); 
+        
         try
         {
-            videoReConverter.convert(mConvertedVideoFrame);
+            videoReConverter.convert(mConvertedVideoFrame);          
         }
-        catch (const MediaException& mediaException)
+        catch (const MediumException& mediumException)
         {
-            videoReConverter.mMediaStatusInPipe = mediaException.cause();
+            setStatusInPipe(m, NOT_READY);            
         }
         return videoReConverter;
     }
@@ -210,28 +221,22 @@ public:
     (VideoEncoder<ConvertedVideoFrameFormat,
                   EncodedVideoFrameCodec, outputWidth, outputHeigth>& videoEncoder)
     {
-        if (mMediaStatusInPipe == MEDIA_READY)
-            videoEncoder.mMediaStatusInPipe = MEDIA_READY;
-        else
-        {
-            videoEncoder.mMediaStatusInPipe = mMediaStatusInPipe;
-            mMediaStatusInPipe = MEDIA_READY;
-            return videoEncoder;
-        }
-
+        Medium& m = videoEncoder;
+        setDistanceFromInputVideoFrameFactory(m, 1);        
+        setInputVideoFrameFactoryId(m, mId);
+        setStatusInPipe(m, mStatusInPipe); 
+        
         try
         {
-            videoEncoder.encode(mConvertedVideoFrame);
+            videoEncoder.encode(mConvertedVideoFrame);           
         }
-        catch (const MediaException& mediaException)
+        catch (const MediumException& mediumException)
         {
-            videoEncoder.mMediaStatusInPipe = mediaException.cause();
+            setStatusInPipe(m, NOT_READY);            
         }
+        
         return videoEncoder;
     }
-
-    // TODO: private with friend framer, decoder
-    enum MediaStatus mMediaStatusInPipe;
 
 private:
 
@@ -248,17 +253,17 @@ private:
     void setSizeOfConvertedFrame(Planar3RawVideoFrame& convertedVideoFrame)
     {
         AVPixelFormat convFmt = FFMPEGUtils::translatePixelFormat<ConvertedVideoFrameFormat>();
-        int size0 = av_image_get_linesize(convFmt, outputWidth, 0);
-        int size1 = av_image_get_linesize(convFmt, outputWidth, 1);
-        int size2 = av_image_get_linesize(convFmt, outputWidth, 2);
-        convertedVideoFrame.setSize<0>(size0 * outputHeigth);
-        convertedVideoFrame.setSize<1>(size1 * outputHeigth);
-        convertedVideoFrame.setSize<2>(size2 * outputHeigth);
+        int size0 = av_image_get_linesize(convFmt, outputWidth::value, 0);
+        int size1 = av_image_get_linesize(convFmt, outputWidth::value, 1);
+        int size2 = av_image_get_linesize(convFmt, outputWidth::value, 2);
+        convertedVideoFrame.setSize<0>(size0 * outputHeigth::value);
+        convertedVideoFrame.setSize<1>(size1 * outputHeigth::value);
+        convertedVideoFrame.setSize<2>(size2 * outputHeigth::value);
     }
 
     void setSizeOfConvertedFrame(PackedRawVideoFrame& convertedVideoFrame)
     {
-        convertedVideoFrame.setSize(mConvertedLibAVFrame->linesize[0]*outputHeigth);
+        convertedVideoFrame.setSize(mConvertedLibAVFrame->linesize[0]*outputHeigth::value);
     }
 
     void specializedConvert(const PackedRawVideoFrame& inputVideoFrame)
@@ -266,7 +271,7 @@ private:
         mInputLibAVFrame->data[0] = (uint8_t*)&inputVideoFrame.data()[0];
         sws_scale(mSwscaleContext, (const uint8_t*const *)mInputLibAVFrame->data,
                                     mInputLibAVFrame->linesize, 0,
-                                    inputHeigth, mConvertedLibAVFrame->data,
+                                    inputHeigth::value, mConvertedLibAVFrame->data,
                                     mConvertedLibAVFrame->linesize);
     }
 
@@ -284,7 +289,7 @@ private:
         mInputLibAVFrame->data[2] = (uint8_t*)inputVideoFrame.plane<2>();
         sws_scale(mSwscaleContext, (const uint8_t*const *)mInputLibAVFrame->data,
                                     mInputLibAVFrame->linesize, 0,
-                                    inputHeigth, mConvertedLibAVFrame->data,
+                                    inputHeigth::value, mConvertedLibAVFrame->data,
                                     mConvertedLibAVFrame->linesize);
     }
 

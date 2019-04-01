@@ -26,32 +26,54 @@ namespace laav
 {
 
 template <typename Container,
-          typename VideoCodecOrFormat, unsigned int width, unsigned int height>
+          typename VideoCodecOrFormat, typename width, typename height>
 class UDPVideoStreamer : public UDPStreamer<Container>
 {
 
 public:
 
-    UDPVideoStreamer(std::string address, unsigned int port) :
-        UDPStreamer<Container>(address, port),
-        mVideoMuxer(true)
+    UDPVideoStreamer(std::string address, unsigned int port, const std::string& id = "") :
+        UDPStreamer<Container>(address, port, id),
+        mVideoMuxer(id+"EmbeddedMux")
     {
+        this->logStreamAddr(constantToString<Container>()+"-"+constantToString<VideoCodecOrFormat>());
     }
 
     /*!
-     *  \exception MediaException(MEDIA_NO_DATA)
+     *  \exception MediumException
      */
     void takeStreamableFrame(const VideoFrame<VideoCodecOrFormat, width, height>& videoFrameToStream)
     {
-        if (this->mStatus == MEDIA_READY)
-            mVideoMuxer.takeMuxableFrame(videoFrameToStream);
+        if (videoFrameToStream.isEmpty())
+            throw MediumException(INPUT_EMPTY);        
+        
+        Medium::mInputVideoFrameFactoryId = videoFrameToStream.mFactoryId;    
+        Medium::mDistanceFromInputVideoFrameFactory = videoFrameToStream.mDistanceFromFactory + 1;
+        
+        if (Medium::mInputStatus ==  PAUSED)
+            throw MediumException(MEDIUM_PAUSED);     
+        
+        if (Medium::mStatusInPipe ==  NOT_READY)
+            throw MediumException(PIPE_NOT_READY);        
+        
+        mVideoMuxer.mux(videoFrameToStream);        
     }
 
+    /*!
+     *  \exception MediumException
+     */    
     void streamMuxedData()
-    {   
+    {         
+        if (Medium::mInputStatus ==  PAUSED)
+            throw MediumException(MEDIUM_PAUSED);
+        
+        if (Medium::mStatusInPipe ==  NOT_READY)
+            throw MediumException(PIPE_NOT_READY);        
+        
         const std::vector<MuxedVideoData<Container, VideoCodecOrFormat,
-                                         width, height> >&                                              
+                                         width, height> >&                                        
         chunksToStream = mVideoMuxer.muxedVideoChunks();
+        Medium::mOutputStatus = READY;        
         unsigned int n;
         std::vector<unsigned char> dataToStream;
         
@@ -63,6 +85,7 @@ public:
         if (sendto(this->mSock, dataToStream.data(), dataToStream.size(), 0, 
             (const sockaddr* )&this->mSockAddr, this->mSlen)==-1)
             printAndThrowUnrecoverableError("UDPVideoStreamer::streamMuxedData(); sendto() error");
+        Medium::mOutputStatus = READY;         
     }
 
 private:

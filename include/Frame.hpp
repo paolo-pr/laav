@@ -36,37 +36,85 @@ extern "C"
 namespace laav
 {
 
-template <typename InputVideoFrameFormat, unsigned int inputWidth, unsigned int inputheight,
-          typename ConvertedVideoFrameFormat, unsigned int outputWidth, unsigned int outputheight>
-class FFMPEGVideoConverter;
-
-class Frame
+class FrameBase
 {
 
+    template <typename InputPCMSoundFormat, typename inputAudioSampleRate,
+              typename inputAudioChannels, typename ConvertedPCMSoundFormat,
+              typename convertedAudioSampleRate, typename convertedAudioChannels>
+    friend class FFMPEGAudioConverter;   
+    
+    template <typename InputVideoFrameFormat, typename inputWidth, typename inputHeight,
+              typename ConvertedVideoFrameFormat, typename outputWidth, typename outputHeight>
+    friend class FFMPEGVideoConverter;    
+
+    template <typename CodecOrFormat, typename width, typename height>
+    friend class VideoFrameHolder;
+
+    template <typename CodecOrFormat, typename audioSampleRate, typename audioChannels>
+    friend class AudioFrameHolder;    
+    
     template <typename Container, typename VideoCodecOrFormat,
-              unsigned int width, unsigned int height>
+              typename width, typename height>
     friend class FFMPEGMuxerVideoImpl;
 
     template <typename Container, typename AudioCodecOrFormat,
-              unsigned int audioSampleRate, enum AudioChannels audioChannels>
+              typename audioSampleRate, typename audioChannels>
     friend class FFMPEGMuxerAudioImpl;
 
     template <typename RawVideoFrameFormat, typename EncodedVideoFrameCodec,
-              unsigned int width, unsigned int height>
+              typename width, typename height>
     friend class FFMPEGVideoEncoder;
 
     template <typename PCMSoundFormat, typename AudioCodec,
-              unsigned int audioSampleRate, enum AudioChannels audioChannels>
+              typename audioSampleRate, typename audioChannels>
     friend class FFMPEGAudioEncoder;
+    
+    template <typename CodecOrFormat, typename width, typename height>
+    friend class V4L2Grabber;
+    
+    template <typename CodecOrFormat, typename audioSampleRate, typename audioChannels>
+    friend class AlsaGrabber;
 
+    template <typename width, typename height>
+    friend class FFMPEGMJPEGDecoder;    
+
+    template <typename Container, typename AudioCodecOrFormat,
+              typename audioSampleRate, typename audioChannels>
+    friend class HTTPAudioStreamer;
+
+    template <typename Container, typename VideoCodecOrFormat,
+              typename width, typename height>
+    friend class HTTPVideoStreamer;
+    
+    template <typename Container, typename AudioCodecOrFormat,
+              typename audioSampleRate, typename audioChannels>
+    friend class UDPAudioStreamer;
+
+    template <typename Container, typename VideoCodecOrFormat,
+              typename width, typename height>
+    friend class UDPVideoStreamer;    
+    
+    template <typename Container,
+            typename VideoCodecOrFormat, typename width, typename height,
+            typename AudioCodecOrFormat, typename audioSampleRate, typename audioChannels>
+    friend class HTTPAudioVideoStreamer;
+    
+    template <typename Container,
+            typename VideoCodecOrFormat, typename width, typename height,
+            typename AudioCodecOrFormat, typename audioSampleRate, typename audioChannels>
+    friend class UDPAudioVideoStreamer;    
+    
 public:
-
-    Frame():
+    
+    FrameBase():
         mTimeBase(AV_TIME_BASE_Q),
         mLibAVFlags(0),
         // TODO: don't use the FFMPEG no value field
+        mAVCodecContext(NULL),
         mMonotonicTs(AV_NOPTS_VALUE),
-        mDateTs(-1)
+        mDateTs(-1),
+        mDistanceFromFactory(0)
     {
     }
 
@@ -120,20 +168,24 @@ public:
     }
 
 private:
-
+    
     AVRational mTimeBase;
     // set by FFMPEGVideoEncoder, accessed by FFMPEGMuxerVideoImpl
     int mLibAVFlags;
     // set by FFMPEGVideoEncoder, accessed by FFMPEGMuxerVideoImpl
     AVPacketSideData* mLibAVSideData;
+    AVCodecContext* mAVCodecContext;
     int mLibAVSideDataElems;
     int64_t mMonotonicTs;
     int64_t mDateTs;
+    // accessed by all friends
+    std::string mFactoryId;
+    unsigned mDistanceFromFactory;
 
 };
 
 template <typename Container, typename AudioCodecOrFormat,
-          unsigned int audioSampleRate, enum AudioChannels>
+          typename audioSampleRate, typename audioChannels>
 class MuxedAudioData
 {
 public:
@@ -170,6 +222,11 @@ public:
         mSize = size;
     }
 
+    bool isEmpty() const
+    {
+        return mSize == 0;
+    }
+    
 private:
 
     ShareableMuxedData mData;
@@ -177,7 +234,7 @@ private:
 };
 
 template <typename Container, typename VideoCodecOrFormat,
-          unsigned int width, unsigned int height>
+          typename width, typename height>
 class MuxedVideoData
 {
 public:
@@ -214,14 +271,19 @@ public:
         mSize = size;
     }
 
+    bool isEmpty() const
+    {
+        return mSize == 0;
+    }
+    
 private:
 
     ShareableMuxedData mData;
     unsigned int mSize;
 };
 
-template <typename Container, typename VideoCodecOrFormat, unsigned int width, unsigned int height,
-          typename AudioCodecOrFormat, unsigned int audioSampleRate, enum AudioChannels>
+template <typename Container, typename VideoCodecOrFormat, typename width, typename height,
+          typename AudioCodecOrFormat, typename audioSampleRate, typename audioChannels>
 class MuxedAudioVideoData
 {
 public:
@@ -257,6 +319,12 @@ public:
     {
         mSize = size;
     }
+    
+    bool isEmpty() const
+    {
+        return mSize == 0;
+    }
+    
 
 private:
 
@@ -265,7 +333,7 @@ private:
 };
 
 template <typename AudioCodec>
-class EncodedAudioFrame : public Frame
+class EncodedAudioFrame : public FrameBase
 {
 public:
 
@@ -300,6 +368,11 @@ public:
     {
         mSize = size;
     }
+    
+    bool isEmpty() const
+    {
+        return mSize == 0;
+    }
 
 private:
 
@@ -307,19 +380,19 @@ private:
     unsigned int mSize;
 };
 
-template <unsigned int width_, unsigned int height_>
-class VideoFrameBase : public Frame
+template <typename width_, typename height_>
+class VideoFrameBase : public FrameBase
 {
 public:
 
     unsigned int width() const
     {
-        return width_;
+        return width_::value;
     }
 
     unsigned int height() const
     {
-        return height_;
+        return height_::value;
     }
 
 };
@@ -368,7 +441,12 @@ public:
     {
         mSize = size;
     }
-
+    
+    bool isEmpty() const
+    {
+        return mSize == 0;
+    }
+    
 private:
 
     unsigned int mSize;
@@ -425,6 +503,11 @@ public:
         return mSizes[planeNum];
     }
 
+    bool isEmpty() const
+    {
+        return size<0>() == 0;
+    }     
+    
 private:
 
     std::vector<unsigned int> mSizes;
@@ -473,6 +556,11 @@ public:
         mSize = size;
     }
 
+    bool isEmpty() const
+    {
+        return mSize == 0;
+    }
+        
 private:
 
     ShareableVideoFrameData mData;
@@ -495,7 +583,7 @@ protected:
     mutable Pixel<Components... > mCurrPixel;
 };
 
-template <typename CodecOrFormat, unsigned int width, unsigned int height>
+template <typename CodecOrFormat, typename width, typename height>
 class VideoFrame
 {
 };
@@ -513,11 +601,6 @@ public:
         mSizes.push_back(0);
         mSizes.push_back(0);
         mSizes.push_back(0);
-    }
-
-    template <unsigned int planeNum>
-    void foo()
-    {
     }
 
     template <unsigned int planeNum>
@@ -553,6 +636,11 @@ public:
     {
         static_assert(planeNum <= 1, "Can't get size for plane with index > 1");
         return mSizes[planeNum];
+    }
+    
+    bool isEmpty() const
+    {
+        return size<0>() == 0;
     }
 
 private:
@@ -597,6 +685,11 @@ public:
         mSize = size;
     }
 
+    bool isEmpty() const
+    {
+        return mSize == 0;
+    }    
+    
 private:
 
     ShareableAudioFrameData mData;
@@ -604,8 +697,8 @@ private:
 
 };
 
-template <typename CodecOrFormat, unsigned int audioSampleRate, enum AudioChannels>
-class AudioFrame : public Frame
+template <typename CodecOrFormat, typename audioSampleRate, typename audioChannels>
+class AudioFrame : public FrameBase
 {
 };
 

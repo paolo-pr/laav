@@ -25,14 +25,14 @@
 namespace laav
 {
 
-class HTTPCommandsReceiver : public EventsProducer
+class HTTPCommandsReceiver : public EventsProducer, public Medium
 {
 
 public:
 
-    HTTPCommandsReceiver(SharedEventsCatcher eventsCatcher, std::string address, unsigned int port):
+    HTTPCommandsReceiver(SharedEventsCatcher eventsCatcher, std::string address, unsigned int port, const std::string& id = ""):
         EventsProducer::EventsProducer(eventsCatcher),
-        mStatus(MEDIA_NOT_READY),
+        Medium(id),        
         mErrno(0),        
         mAddress(address),
         mPort(port)
@@ -45,22 +45,27 @@ public:
         }
 
         observeHTTPEventsOn(mAddress, mPort);
-        mStatus = MEDIA_READY;
+        mInputStatus  = READY;
     }
 
     std::map<std::string, std::string>& receivedCommands()
     {
+        Medium::mOutputStatus = NOT_READY; 
+
+        if (mCommands.size() == 0)
+            throw MediumException(OUTPUT_NOT_READY);        
+        
+        if (Medium::mInputStatus ==  PAUSED)
+            throw MediumException(MEDIUM_PAUSED);        
+        
+        Medium::mOutputStatus = READY; 
+        
         return mCommands;
     }
 
     void clearCommands()
     {
         mCommands.clear();
-    }
-
-    enum MediaStatus status() const
-    {
-        return mStatus;
     }
 
     int getErrno() const
@@ -99,7 +104,6 @@ private:
         evbuffer_free(buf);
     }
 
-    enum MediaStatus mStatus;
     int mErrno;
     std::map<std::string, std::string> mCommands;
     std::map<struct evhttp_connection*, struct evhttp_request*> mClientConnectionsAndRequests;

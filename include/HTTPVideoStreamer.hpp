@@ -27,45 +27,107 @@ namespace laav
 
 template <typename Container,
           typename VideoCodecOrFormat,
-          unsigned int width,
-          unsigned int height>
+          typename width,
+          typename height>
 class HTTPVideoStreamer : public HTTPStreamer<Container>
 {
 
 public:
 
-    HTTPVideoStreamer(SharedEventsCatcher eventsCatcher, std::string address, unsigned int port) :
-        HTTPStreamer<Container>(eventsCatcher, address, port),
+    HTTPVideoStreamer(SharedEventsCatcher eventsCatcher, std::string address, 
+                      unsigned int port, const std::string& id = "") :
+        HTTPStreamer<Container>(eventsCatcher, address, port, id),
         mLatency(0),
         mVideoStreamingStartTime(0),
-        mVideoMuxer(false)
+        mVideoMuxer("")
     {
+        this->logStreamAddr(constantToString<Container>()+"-"+constantToString<VideoCodecOrFormat>());
     }
-
+    
+    template <typename RawVideoFrameFormat>
+    HTTPVideoStreamer(SharedEventsCatcher eventsCatcher, std::string address, 
+                      unsigned int port, const FFMPEGVideoEncoder<RawVideoFrameFormat, VideoCodecOrFormat, width, height>& vEnc,
+                      const std::string& id = "") :
+        HTTPStreamer<Container>(eventsCatcher, address, port, id),
+        mLatency(0),
+        mVideoStreamingStartTime(0),
+        mVideoMuxer(vEnc, "")
+    {
+        this->logStreamAddr(constantToString<Container>()+"-"+constantToString<VideoCodecOrFormat>());
+    }    
+    
     /*!
-     *  \exception MediaException(MEDIA_NO_DATA)
+     *  \exception MediumException
      */
     void takeStreamableFrame(const VideoFrame<VideoCodecOrFormat,
                              width, height>& videoFrameToStream)
     {
-        if (this->mStatus == MEDIA_READY)
-            mVideoMuxer.takeMuxableFrame(videoFrameToStream);
+        if (videoFrameToStream.isEmpty())
+            throw MediumException(INPUT_EMPTY);         
+        
+        Medium::mInputVideoFrameFactoryId = videoFrameToStream.mFactoryId;
+        Medium::mDistanceFromInputVideoFrameFactory = videoFrameToStream.mDistanceFromFactory + 1;        
+        
+        if (Medium::mInputStatus ==  PAUSED)
+            throw MediumException(MEDIUM_PAUSED);
+        
+        if (Medium::mStatusInPipe ==  NOT_READY)
+            throw MediumException(PIPE_NOT_READY);
+        
+        if (this->mClientConnectionsAndRequests.size() == 0)
+            throw MediumException(INPUT_NOT_READY);
+
+        mVideoMuxer.mux(videoFrameToStream);        
+        
+        using Iter3 = std::map<struct evhttp_connection*, struct evhttp_request* >::iterator;
+        for (Iter3 it = this->mClientConnectionsAndRequests.begin();
+                it != this->mClientConnectionsAndRequests.end(); ++it)
+        {
+            if (videoFrameToStream.mLibAVFlags & AV_PKT_FLAG_KEY)
+            {
+                //std::cerr << "got key frame\n";
+                this->mGotKeyFrameForRequest[it->second] = true;
+                if (this->mSkipFramesForRequest[it->second] == -1 && mVideoMuxer.latencyCounter() != -1)
+                    this->mSkipFramesForRequest[it->second] = mVideoMuxer.latencyCounter();
+                    
+            }
+        }
     }
 
+    /*!
+     *  \exception MediumException
+     */    
     void streamMuxedData()
     {
-
-        if (this->mClientConnectionsAndRequests.size() != 0 && this->mStatus == MEDIA_READY)
+        if (Medium::mInputStatus ==  PAUSED)
+            throw MediumException(MEDIUM_PAUSED);
+        
+        if (Medium::mStatusInPipe ==  NOT_READY)
+            throw MediumException(PIPE_NOT_READY);        
+        
+        if (this->mClientConnectionsAndRequests.size() != 0)
         {
-            try
+            //try
             {
                 using Iter3 = std::map<struct evhttp_connection*, struct evhttp_request* >::iterator;
                 for (Iter3 it = this->mClientConnectionsAndRequests.begin();
                      it != this->mClientConnectionsAndRequests.end(); ++it)
                 {
+                                        
                     const std::vector<MuxedVideoData<Container, VideoCodecOrFormat, width, height> >&
                     chunksToStream = mVideoMuxer.muxedVideoChunks();
+                    
+                    bool gotKeyFrame = this->mGotKeyFrameForRequest[it->second];
+                    int& framesToSkip = this->mSkipFramesForRequest[it->second];
+                    if (! (gotKeyFrame && framesToSkip != -1) )
+                        continue;
+                    else if (framesToSkip > 0)
+                    {
+                        framesToSkip--;
+                        continue;
+                    }
 
+                    Medium::mOutputStatus = READY;
                     unsigned int n;
                     struct evbuffer* buf = evbuffer_new();
                     if (this->mWrittenHeaderFlagAndRequests[it->second] == false)
@@ -86,44 +148,20 @@ public:
                     }
                     evhttp_send_reply_chunk(it->second, buf);
                     evbuffer_free(buf);
+                    Medium::mOutputStatus = READY;                     
                 }
-            }
+            }/*
             catch (const MediaException& mediaException)
             {
                 // DO next step
-            }
+            }*/
         }
+        else
+            throw MediumException(OUTPUT_NOT_READY);
     }
 
 private:
-
-    void hTTPDisconnectionCallBack(struct evhttp_connection* clientConnection)
-    {
-        this->mWrittenHeaderFlagAndRequests.erase(this->mClientConnectionsAndRequests[clientConnection]);
-        evhttp_request_free(this->mClientConnectionsAndRequests[clientConnection]);
-        this->mClientConnectionsAndRequests.erase(clientConnection);
-        if (this->mClientConnectionsAndRequests.size() == 0)
-        {
-            mVideoMuxer.stopMuxing();
-            this->mIsStreaming = false;            
-        }
-
-    }
-
-    void hTTPConnectionCallBack(struct evhttp_request* clientRequest,
-                                struct evhttp_connection* clientConnection)
-    {
-        this->mClientConnectionsAndRequests[clientConnection] = clientRequest;
-
-        if (mVideoMuxer.isMuxing())
-            this->mWrittenHeaderFlagAndRequests[clientRequest] = false;
-        else
-            this->mWrittenHeaderFlagAndRequests[clientRequest] = true;
-        evhttp_send_reply_start(clientRequest, HTTP_OK, "OK");
-        mVideoMuxer.startMuxing();
-        this->mIsStreaming = true;
-    }
-
+    
     int64_t mLatency;
     int64_t mVideoStreamingStartTime;
     FFMPEGVideoMuxer<Container, VideoCodecOrFormat, width, height> mVideoMuxer;

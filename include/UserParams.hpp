@@ -83,6 +83,16 @@ enum H264Presets
     H264_PLACEBO
 };
 
+enum OpusApplications
+{
+    OPUS_DEFAULT_APPLICATION,
+    OPUS_VOIP,
+    OPUS_AUDIO,
+    OPUS_LOWDELAY
+};
+
+float OPUS_DEFAULT_COMPRESSION_LEVEL = -1;
+
 }
 
 #endif // USERPARAMS_HPP_INCLUDED

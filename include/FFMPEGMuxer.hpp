@@ -32,58 +32,115 @@ extern "C"
 
 #include <iostream>
 #include <fstream>
+#include <chrono>
+#include <ctime>
+#include <sstream>
+
+#define DEFAULT_REC_FILENAME "[[default]]"
 
 namespace laav
 {
 
 template <typename Container>
-class FFMPEGMuxerCommonImpl
+class FFMPEGMuxerCommonImpl : public Medium
 {
+
+template <typename Container_,
+          typename VideoCodecOrFormat, typename width, typename height,
+          typename AudioCodecOrFormat, typename audioSampleRate, typename audioChannels>              
+    friend class HTTPAudioVideoStreamer;    
+    
     template <typename Container_, typename VideoCodecOrFormat,
-              unsigned int width, unsigned int height>
+              typename width, typename height>
     friend class HTTPVideoStreamer;
 
     template <typename Container_, typename AudioCodecOrFormat,
-              unsigned int audioSampleRate, enum AudioChannels audioChannels>
+              typename audioSampleRate, typename audioChannels>
     friend class HTTPAudioStreamer;
 
     template <typename Container_, typename VideoCodecOrFormat,
-              unsigned int width, unsigned int height>
+              typename width, typename height>
     friend class UDPVideoStreamer;
 
     template <typename Container_, typename AudioCodecOrFormat,
-              unsigned int audioSampleRate, enum AudioChannels audioChannels>
+              typename audioSampleRate, typename audioChannels>
     friend class UDPAudioStreamer;    
     
 public:
-
-    bool startMuxing(const std::string& outputFilename = "")
+        
+    // TODO: add exception handling for recorded file
+    bool startRecording(const std::string& outputFilename = "")
     {
         if (isMuxing())
             return false;
+        writeTrailer(); 
+        avio_flush(mMuxerAVIOContext); 
+        writeHeader();
+        mMuxedChunksHelper.headerWritten = false;
+        mMuxedChunksHelper.gotVideoKeyFrameForRec = false;
+        
         mDoMux = true;
         mLastMuxedAudioFrameOffset = mAudioAVPktsToMuxOffset;
         mLastMuxedVideoFrameOffset = mVideoAVPktsToMuxOffset;
+        std::string outputFilenameCpy = outputFilename;
         if (!outputFilename.empty())
         {
-            mMuxedChunks.muxedFile.open(outputFilename, std::ios::trunc);
+            if(outputFilename.find(DEFAULT_REC_FILENAME) != std::string::npos)
+            {
+                std::time_t t = std::time(nullptr);
+                std::tm tm = *std::localtime(&t);
+                std::ostringstream oss;
+                oss << std::put_time( &tm, "_%Y-%m-%d_%H:%M:%S" );
+                std::string timestamp( oss.str() );
+                std::string dot; 
+                if (!mContainerFileExtension.empty())
+                    dot = ".";
+                outputFilenameCpy = split(outputFilename, DEFAULT_REC_FILENAME)[0] + 
+                                    timestamp + dot + mContainerFileExtension; 
+                outputFilenameCpy = mId + outputFilenameCpy;
+            }
+            
+            try
+            {
+                mMuxedChunksHelper.muxedFile.open(outputFilenameCpy, std::ios::trunc);
+                mOutputFilename = outputFilenameCpy;
+            }
+            catch (const std::exception& e)
+            {
+                printAndThrowUnrecoverableError("mMuxedChunksHelper.muxedFile.open(...)");
+            }
+            mMuxedChunksHelper.recordingFileSize = 0;
             mWriteToFile = true;
         }
         else
             mWriteToFile = false;
+        
+        loggerLevel1 << "Started recording '" << mOutputFilename << "' on muxer with id='" <<
+        Medium::id() << "'" << std::endl;
+        
         return true;
     }
 
-    bool stopMuxing()
+    //TODO: add proper exception handling for muxedFile
+    bool stopRecording()
     {
         if (!isMuxing())
             return false;
+                
         mDoMux = false;
-        writeTrailer();
+        writeTrailer();    
         mTrailerWritten = true;
-        if (mMuxedChunks.muxedFile.is_open())
-            mMuxedChunks.muxedFile.close();
+        if (mMuxedChunksHelper.muxedFile.is_open())
+        {
+            mMuxedChunksHelper.muxedFile.close();
+            loggerLevel1 << "Finished recording '" << mOutputFilename << "' on muxer with id='" << 
+            Medium::id() << "' : filesize=" << mMuxedChunksHelper.recordingFileSize << std::endl;             
+            mMuxedChunksHelper.recordingFileSize = -1;
+        }
+        avio_flush(mMuxerAVIOContext);  
+        writeHeader();         
         mWriteToFile = false;
+
         return true;
     }
 
@@ -94,35 +151,48 @@ public:
     
     bool isRecording() const
     {
-        return mMuxedChunks.muxedFile.is_open();
+        return mMuxedChunksHelper.muxedFile.is_open();
     }
 
     const std::string& header() const
     {
-        return mMuxedChunks.header;
+        return mMuxedChunksHelper.header;
     }
 
+    int recordingFileSize() const
+    {
+        return mMuxedChunksHelper.recordingFileSize;
+    }
+    
+    
 protected:
 
-    FFMPEGMuxerCommonImpl():
+    FFMPEGMuxerCommonImpl(const std::string& id = ""):
+        Medium(id),
         mMuxAudio(false),
         mMuxVideo(false),
         mDoMux(false),
         mHeaderWritten(false),
         mTrailerWritten(false),
         mAudioReady(false),
-        mVideoReady(false),
+        mVideoReady(false),      
         mLastMuxedAudioFrameOffset(0),
         mAudioAVPktsToMuxOffset(0),
         mLastMuxedVideoFrameOffset(0),
         mVideoAVPktsToMuxOffset(0),
         mAudioStreamIndex(1),
-        mVideoStreamIndex(0),
+        mVideoStreamIndex(0),      
         mWriteToFile(false)
     {
-        av_register_all();
+        
+        if (std::is_same<Container, MPEGTS>::value)
+            mContainerFileExtension = "ts";
+        else if (std::is_same<Container, MATROSKA>::value)
+            mContainerFileExtension = "mkv";
+            
+        //av_register_all();
         // TODO: is the following line really necessary?
-        avcodec_register_all();
+        //avcodec_register_all();
 
         AVOutputFormat* muxerFormat =
         av_guess_format(FFMPEGUtils::translateContainer<Container>(), NULL, NULL);
@@ -139,20 +209,26 @@ protected:
         if (!mMuxerContext)
             printAndThrowUnrecoverableError("(uint8_t* )av_malloc(...)");
         // TODO: fixed value?
-        mMuxedChunks.data.resize(5000);
-        mMuxedChunks.offset = 0;
-
-        mMuxedChunks.newGroupOfChunks = false;
-
+        mMuxedChunksHelper.data.resize(5000);
+        mMuxedChunksHelper.offset = 0;
+        mMuxedChunksHelper.recordingFileSize = -1;
+        mMuxedChunksHelper.latencyCounter = -1;
+        mMuxedChunksHelper.stepsToSkipBeforeRec = -1;
+        mMuxedChunksHelper.gotVideoKeyFrameForRec = false;
+        mMuxedChunksHelper.latencyValObtained = false;
+        mMuxedChunksHelper.needsVideoKeyFrame = false;
+        mMuxedChunksHelper.muxedFile.exceptions(std::fstream::badbit);
+        mMuxedChunksHelper.newGroupOfChunks = false;
+        mMuxedChunksHelper.headerWritten = false;
+        
         unsigned int n;
-        for (n = 0; n < mMuxedChunks.data.size(); n++)
+        for (n = 0; n < mMuxedChunksHelper.data.size(); n++)
         {
-            mMuxedChunks.data[n].ptr = (uint8_t* )av_malloc(4096);
-            mMuxedChunks.data[n].size = 0;
+            mMuxedChunksHelper.data[n].ptr = (uint8_t* )av_malloc(4096);
+            mMuxedChunksHelper.data[n].size = 0;
         }
 
-        mMuxerAVIOContext = avio_alloc_context(mMuxerAVIOContextBuffer, muxerAVIOContextBufferSize,
-                                               1, &mMuxedChunks, NULL, &writeMuxedChunk, NULL);
+        mMuxerAVIOContext = avio_alloc_context(mMuxerAVIOContextBuffer, muxerAVIOContextBufferSize, 1, &mMuxedChunksHelper, NULL, &writeMuxedChunk, NULL);
 
         if (!mMuxerAVIOContext)
             printAndThrowUnrecoverableError("mMuxerAVIOContext = avio_alloc_context(...);");
@@ -165,6 +241,7 @@ protected:
         // TODO: improve design. First packets for audio and video
         // are set here in order to obtain a reference in muxNextUsefulFrameFromBuffer
         // in case one of the two media is not set
+        
         AVPacket audioPkt;
         mAudioAVPktsToMux.push_back(audioPkt);
         av_init_packet(&mAudioAVPktsToMux[0]);
@@ -197,16 +274,13 @@ protected:
             {
                 if (resetChunks)
                 {
-                    mMuxedChunks.offset = 0;
-                }
-
-                if (!this->mHeaderWritten)
-                {
-                    this->writeHeader();
+                    mMuxedChunksHelper.offset = 0;
                 }
 
                 if (audioPktToMux.size != 0)
                 {
+                    if (!mMuxedChunksHelper.latencyValObtained && mMuxedChunksHelper.needsVideoKeyFrame)
+                        mMuxedChunksHelper.latencyCounter++;
                     if (av_write_frame(this->mMuxerContext, &audioPktToMux) < 0)
                         printAndThrowUnrecoverableError("av_write_frame(...)");               
                 }
@@ -223,14 +297,11 @@ protected:
             {
                 if (resetChunks)
                 {
-                    mMuxedChunks.offset = 0;
+                    mMuxedChunksHelper.offset = 0;
                 }
-
-                if (!this->mHeaderWritten)
-                {
-                    this->writeHeader();
-                }
-
+                if (!mMuxedChunksHelper.latencyValObtained && mMuxedChunksHelper.needsVideoKeyFrame)
+                    mMuxedChunksHelper.latencyCounter++;
+                
                 if (av_write_frame(this->mMuxerContext, &videoPktToMux) < 0)
                     printAndThrowUnrecoverableError("av_write_frame(...)");
 
@@ -245,62 +316,46 @@ protected:
     void completeMuxerInitialization()
     {
         if (avformat_init_output(this->mMuxerContext, NULL) < 0)
-            printAndThrowUnrecoverableError("avformat_init_output(...)");
+            printAndThrowUnrecoverableError("avformat_init_output(...)");       
+        writeHeader();
     }
 
     void writeHeader()
-    {
-        if (mHeaderWritten)
-            return;
+    {        
         if (avformat_write_header(this->mMuxerContext, NULL) < 0)
             printAndThrowUnrecoverableError("avformat_write_header(...)");
-
-        AVPacket dummyPacket;
-        av_init_packet(&dummyPacket);
-        dummyPacket.size = 0;
-        dummyPacket.pts = dummyPacket.dts = 0;
-        int level = av_log_get_level();
-        av_log_set_level(AV_LOG_QUIET);
-        av_write_frame(FFMPEGMuxerCommonImpl<Container>::mMuxerContext, &dummyPacket);
-        av_log_set_level(level);
-        av_packet_unref(&dummyPacket);
-        mHeaderWritten = true;
-        mTrailerWritten = false;
     }
 
     void writeTrailer()
     {
-        if (mTrailerWritten)
-            return;
         av_write_trailer(this->mMuxerContext);
-        mHeaderWritten = false;
-        mTrailerWritten = true;
     }
 
     ~FFMPEGMuxerCommonImpl()
     {
         writeTrailer();
-        if (mMuxedChunks.muxedFile.is_open())
-            mMuxedChunks.muxedFile.close();
+        if (mMuxedChunksHelper.muxedFile.is_open())
+            mMuxedChunksHelper.muxedFile.close();
         av_free(mMuxerAVIOContextBuffer);
         unsigned int n;
-        for (n = 0; n < mMuxedChunks.data.size(); n++)
+        for (n = 0; n < mMuxedChunksHelper.data.size(); n++)
         {
-            av_free(mMuxedChunks.data[n].ptr);
-        }
+            av_free(mMuxedChunksHelper.data[n].ptr);
+        }      
         avformat_free_context(mMuxerContext);
         av_free(mMuxerAVIOContext);
 
     }
 
     bool mMuxAudio;
-    bool mMuxVideo;
+    bool mMuxVideo;   
     AVFormatContext* mMuxerContext;
     bool mDoMux;
     bool mHeaderWritten;
     bool mTrailerWritten;
     bool mAudioReady;
-    bool mVideoReady;
+    bool mVideoReady; 
+    std::string mOutputFilename;
     unsigned int mLastMuxedAudioFrameOffset;
     unsigned int mAudioAVPktsToMuxOffset;
     std::vector<AVPacket> mAudioAVPktsToMux;
@@ -312,57 +367,87 @@ protected:
     unsigned int mAudioStreamIndex;
     unsigned int mVideoStreamIndex;
     ShareableMuxedData mMuxedData;
-
+    std::string mContainerFileExtension;
+    
     struct MuxedDataChunk
     {
         uint8_t* ptr;
         size_t size;
     };
 
-    struct MuxedChunks
+    struct MuxedChunksHelper
     {
         bool newGroupOfChunks;
         unsigned int offset;
         std::vector<struct MuxedDataChunk> data;
         std::ofstream muxedFile;
         std::string header;
-    } mMuxedChunks;
+        int recordingFileSize;
+        int latencyCounter;
+        bool latencyValObtained;
+        int stepsToSkipBeforeRec;
+        bool needsVideoKeyFrame;
+        bool gotVideoKeyFrameForRec;
+        bool headerWritten;
+    } mMuxedChunksHelper;
 
 private:
 
     bool mWriteToFile;
 
+    int latencyCounter() const
+    {
+        if (mMuxedChunksHelper.latencyValObtained)
+            return mMuxedChunksHelper.latencyCounter;
+        else
+            return -1;
+    }
+    
     static int writeMuxedChunk (void* opaque, uint8_t* muxedDataSink, int chunkSize)
     {
-        // TODO: static cast
-        struct MuxedChunks* muxedChunks = ( struct MuxedChunks* )opaque;
-        memcpy(muxedChunks->data[muxedChunks->offset].ptr, muxedDataSink, chunkSize);
+        // TODO: static cast        
+        struct MuxedChunksHelper* muxedChunksHelper = ( struct MuxedChunksHelper* )opaque;
+        memcpy(muxedChunksHelper->data[muxedChunksHelper->offset].ptr, 
+               muxedDataSink, chunkSize);
 
-        if (muxedChunks->header.empty())
+        if (!muxedChunksHelper->latencyValObtained && muxedChunksHelper->latencyCounter >= 0)
         {
-            muxedChunks->header.assign ((const char* )muxedDataSink, chunkSize);
+            muxedChunksHelper->latencyValObtained = true;
+            muxedChunksHelper->stepsToSkipBeforeRec = muxedChunksHelper->latencyCounter;
+        }
+        
+        if (muxedChunksHelper->header.empty())
+        {
+            muxedChunksHelper->header.assign ((const char* )muxedDataSink, chunkSize);
+            //if (std::is_same<Container, MPEGTS>::value)
+            //return 0;
         }
 
-        muxedChunks->data[muxedChunks->offset].size = chunkSize;
+        muxedChunksHelper->data[muxedChunksHelper->offset].size = chunkSize;
         if (chunkSize != 0)
         {
-            muxedChunks->newGroupOfChunks = true;
-            if (muxedChunks->muxedFile.is_open())
+            muxedChunksHelper->newGroupOfChunks = true;
+            if (muxedChunksHelper->muxedFile.is_open())
             {
+                muxedChunksHelper->recordingFileSize += chunkSize;
                 std::streamsize dataSize = chunkSize;
-                muxedChunks->muxedFile.write((const char* )muxedDataSink, dataSize);
+                
+                if (!muxedChunksHelper->headerWritten && !std::is_same<Container, MPEGTS>::value)
+                {
+                    muxedChunksHelper->muxedFile.write((const char* )muxedChunksHelper->header.c_str(), muxedChunksHelper->header.size());
+                    muxedChunksHelper->headerWritten = true;
+                }
+                muxedChunksHelper->muxedFile.write((const char* )muxedDataSink, dataSize);
             }
         }
-        muxedChunks->offset++;
-
+        muxedChunksHelper->offset++;
         return chunkSize;
     }
 
     AVCodecContext* mVideoEncoderCodecContext0;
     AVCodecContext* mAudioEncoderCodecContext0;
     AVCodecContext* mVideoEncoderCodecContext;
-    AVCodecContext* mAudioEncoderCodecContext;
-
+    AVCodecContext* mAudioEncoderCodecContext;        
 };
 
 }

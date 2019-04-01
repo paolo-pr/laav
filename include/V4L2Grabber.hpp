@@ -25,8 +25,8 @@
 #include <iostream>
 #include <fstream>
 #include <vector>
+#include "Medium.hpp"
 #include "AllVideoCodecsAndFormats.hpp"
-#include "Common.hpp"
 #include "EventsManager.hpp"
 #include "VideoFrameHolder.hpp"
 
@@ -71,7 +71,8 @@ enum V4LDeviceError
     NO_DEVICE_ERROR,
     NO_RESOURCE_ERROR,
     CONFIG_IMG_TO_CAPTURE_ERROR,
-    VIDIOC_STREAMOFF_ERROR
+    VIDIOC_STREAMOFF_ERROR,
+    V4L_EAGAIN
 };
 
 struct V4LUtils
@@ -103,17 +104,19 @@ __u32 V4LUtils::translatePixelFormat<MJPEG>()
     return V4L2_PIX_FMT_MJPEG;
 }
 
-template <typename CodecOrFormat, unsigned int width, unsigned int height>
-class V4L2Grabber : public EventsProducer
+template <typename CodecOrFormat, typename width, typename height>
+class V4L2Grabber : private EventsProducer, public Medium
 {
 
 public:
 
-    V4L2Grabber(SharedEventsCatcher eventsCatcher, const std::string& devName, unsigned int fps = 0):
+    V4L2Grabber(SharedEventsCatcher eventsCatcher, const std::string& devName, 
+                unsigned int fps = 0, const std::string& id = ""):
         EventsProducer::EventsProducer(eventsCatcher),
+        Medium(id),
         mFps(fps),
         mV4LError(V4L_NO_ERROR),
-        mStatus(DEV_INITIALIZING),
+        mDeviceStatus(DEV_INITIALIZING),
         mErrno(0),
         mUnrecoverableState(false),
         mLatency(0),
@@ -131,8 +134,11 @@ public:
             mEncodedFramesBuffer[i] = new unsigned char[500000];
         }
 
-        if (openDevice())
+        try
         {
+            mInputStatus  = NOT_READY;
+            mOutputStatus  = NOT_READY;                
+            openDevice();
             configureDevice();
             if (!mUnrecoverableState)
             {
@@ -143,8 +149,13 @@ public:
             if (!mUnrecoverableState)
                 initMmap();
             if (!mUnrecoverableState)
-                startCapturing();
+            {
+                startCapturing();   
+                mInputStatus  = READY;
+            }
         }
+        catch (V4LDeviceError err) 
+        { }
     }
 
     ~V4L2Grabber()
@@ -163,14 +174,18 @@ public:
     operator >>
     (VideoFrameHolder<CodecOrFormat, width, height>& videoFrameHolder)
     {
+        Medium& m = videoFrameHolder;
+        setDistanceFromInputVideoFrameFactory(m, 1);        
+        setInputVideoFrameFactoryId(m, mId);
+        setStatusInPipe(m, READY); 
+        
         try
         {
-            videoFrameHolder.hold(grabNextFrame());
-            videoFrameHolder.mMediaStatusInPipe = MEDIA_READY;
+            videoFrameHolder.hold(grabNextFrame());          
         }
-        catch (const MediaException& mediaException)
+        catch (const MediumException& mediumException)
         {
-            videoFrameHolder.mMediaStatusInPipe = mediaException.cause();
+            setStatusInPipe(m, NOT_READY);            
         }
         return videoFrameHolder;
     }
@@ -179,14 +194,18 @@ public:
     operator >>
     (FFMPEGMJPEGDecoder<width, height>& videoDecoder)
     {
+        Medium& m = videoDecoder;
+        setDistanceFromInputVideoFrameFactory(m, 1);        
+        setInputVideoFrameFactoryId(m, mId);
+        setStatusInPipe(m, READY);         
+        
         try
         {
-            videoDecoder.decode(grabNextFrame());
-            videoDecoder.mMediaStatusInPipe = MEDIA_READY;
+            videoDecoder.decode(grabNextFrame());       
         }
-        catch (const MediaException& mediaException)
+        catch (const MediumException& mediumException)
         {
-            videoDecoder.mMediaStatusInPipe = mediaException.cause();
+            setStatusInPipe(m, NOT_READY);            
         }
         return videoDecoder;
     }
@@ -196,33 +215,43 @@ public:
     operator >>
     (VideoEncoder<CodecOrFormat, EncodedVideoFrameCodec, width, height>& videoEncoder)
     {
+        Medium& m = videoEncoder;
+        setDistanceFromInputVideoFrameFactory(m, 1);        
+        setInputVideoFrameFactoryId(m, mId);
+        setStatusInPipe(m, READY); 
+        
         try
         {
-            videoEncoder.encode(grabNextFrame());
+            videoEncoder.encode(grabNextFrame());          
         }
-        catch (const MediaException& mediaException)
+        catch (const MediumException& mediumException)
         {
-            videoEncoder.mMediaStatusInPipe = mediaException.cause();
+            setStatusInPipe(m, NOT_READY);            
         }
         return videoEncoder;
     }
 
-    template <typename ConvertedVideoFrameFormat, unsigned int outputWidth, unsigned int outputHeigth>
+    template <typename ConvertedVideoFrameFormat, typename outputWidth, typename outputHeigth>
     FFMPEGVideoConverter<CodecOrFormat, width, height,
                          ConvertedVideoFrameFormat, outputWidth, outputHeigth>&
      operator >>
      (FFMPEGVideoConverter<CodecOrFormat, width, height,
                            ConvertedVideoFrameFormat, outputWidth, outputHeigth>& videoConverter)
     {
+        Medium& m = videoConverter;
+        setDistanceFromInputVideoFrameFactory(m, 1);        
+        setInputVideoFrameFactoryId(m, mId);
+        setStatusInPipe(m, READY);        
+        
         try
         {
-            videoConverter.convert(grabNextFrame());
-            videoConverter.mMediaStatusInPipe = MEDIA_READY;
+            videoConverter.convert(grabNextFrame());            
         }
-        catch (const MediaException& mediaException)
+        catch (const MediumException& mediumException)
         {
-            videoConverter.mMediaStatusInPipe = mediaException.cause();
+            setStatusInPipe(m, NOT_READY);            
         }
+        
         return videoConverter;
     }
 
@@ -231,20 +260,25 @@ public:
     operator >>
     (HTTPVideoStreamer<Container, CodecOrFormat, width, height>& httpVideoStreamer)
     {
+        Medium& m = httpVideoStreamer;
+        setDistanceFromInputVideoFrameFactory(m, 1);        
+        setInputVideoFrameFactoryId(m, mId);         
+        setStatusInPipe(m, READY); 
+        
         try
         {
             httpVideoStreamer.takeStreamableFrame(grabNextFrame());
-            httpVideoStreamer.streamMuxedData();
+            httpVideoStreamer.streamMuxedData();         
         }
-        catch (const MediaException& mediaException)
+        catch (const MediumException& mediumException)
         {
-            // Do nothing, because the streamer is at the end of the pipe
+            setStatusInPipe(m, NOT_READY);            
         }
         return httpVideoStreamer;
     }
 
     template <typename Container, typename AudioCodec,
-              unsigned int audioSampleRate, enum AudioChannels audioChannels>
+              typename audioSampleRate, typename audioChannels>
     HTTPAudioVideoStreamer<Container,
                            CodecOrFormat, width, height,
                            AudioCodec, audioSampleRate, audioChannels>&
@@ -253,14 +287,19 @@ public:
                             CodecOrFormat, width, height,
                             AudioCodec, audioSampleRate, audioChannels>& httpAudioVideoStreamer)
     {
+        Medium& m = httpAudioVideoStreamer;
+        setDistanceFromInputVideoFrameFactory(m, 1);        
+        setInputVideoFrameFactoryId(m, mId);  
+        setStatusInPipe(m, READY); 
+        
         try
         {
             httpAudioVideoStreamer.takeStreamableFrame(grabNextFrame());
-            httpAudioVideoStreamer.streamMuxedData();
+            httpAudioVideoStreamer.streamMuxedData();           
         }
-        catch (const MediaException& mediaException)
+        catch (const MediumException& mediumException)
         {
-            // Do nothing, because the streamer is at the end of the pipe
+            setStatusInPipe(m, NOT_READY);            
         }
         return httpAudioVideoStreamer;
     }
@@ -270,36 +309,44 @@ public:
     operator >>
     (UDPVideoStreamer<Container, CodecOrFormat, width, height>& udpVideoStreamer)
     {
+        Medium& m = udpVideoStreamer;
+        setDistanceFromInputVideoFrameFactory(m, 1);        
+        setInputVideoFrameFactoryId(m, mId);        
+        setStatusInPipe(m, READY); 
+        
         try
         {
             udpVideoStreamer.takeStreamableFrame(grabNextFrame());
-            udpVideoStreamer.streamMuxedData();
+            udpVideoStreamer.streamMuxedData();            
         }
-        catch (const MediaException& mediaException)
+        catch (const MediumException& mediumException)
         {
-            // Do nothing, because the streamer is at the end of the pipe
+            setStatusInPipe(m, NOT_READY);            
         }
         return udpVideoStreamer;
     }
 
     template <typename Container, typename AudioCodec,
-              unsigned int audioSampleRate, enum AudioChannels audioChannels>
-    UDPAudioVideoStreamer<Container,
-                           CodecOrFormat, width, height,
-                           AudioCodec, audioSampleRate, audioChannels>&
+              typename audioSampleRate, typename audioChannels>
+    UDPAudioVideoStreamer<Container, CodecOrFormat, width, height,
+                          AudioCodec, audioSampleRate, audioChannels>&
     operator >>
-    (UDPAudioVideoStreamer<Container,
-                            CodecOrFormat, width, height,
-                            AudioCodec, audioSampleRate, audioChannels>& udpAudioVideoStreamer)
+    (UDPAudioVideoStreamer<Container, CodecOrFormat, width, height,
+                           AudioCodec, audioSampleRate, audioChannels>& udpAudioVideoStreamer)
     {
+        Medium& m = udpAudioVideoStreamer;
+        setDistanceFromInputVideoFrameFactory(m, 1);        
+        setInputVideoFrameFactoryId(m, mId);         
+        setStatusInPipe(m, READY); 
+        
         try
         {
             udpAudioVideoStreamer.takeStreamableFrame(grabNextFrame());
-            udpAudioVideoStreamer.streamMuxedData();
+            udpAudioVideoStreamer.streamMuxedData();           
         }
-        catch (const MediaException& mediaException)
+        catch (const MediumException& mediumException)
         {
-            // Do nothing, because the streamer is at the end of the pipe
+            setStatusInPipe(m, NOT_READY);            
         }
         return udpAudioVideoStreamer;
     }    
@@ -309,19 +356,24 @@ public:
     operator >>
     (FFMPEGVideoMuxer<Container, CodecOrFormat, width, height>& videoMuxer)
     {
+        Medium& m = videoMuxer;
+        setDistanceFromInputVideoFrameFactory(m, 1);        
+        setInputVideoFrameFactoryId(m, mId); 
+        setStatusInPipe(m, READY); 
+        
         try
         {
-            videoMuxer.takeMuxableFrame(grabNextFrame());
+            videoMuxer.mux(grabNextFrame());         
         }
-        catch (const MediaException& mediaException)
+        catch (const MediumException& mediumException)
         {
-            videoMuxer.mMediaStatusInPipe = mediaException.cause();
+            setStatusInPipe(m, NOT_READY);            
         }
         return videoMuxer;
     }
 
     template <typename Container,
-              typename AudioCodec, unsigned int audioSampleRate, enum AudioChannels audioChannels>
+              typename AudioCodec, typename audioSampleRate, typename audioChannels>
     FFMPEGAudioVideoMuxer<Container,
                           CodecOrFormat, width, height,
                           AudioCodec, audioSampleRate, audioChannels>&
@@ -330,45 +382,65 @@ public:
                            CodecOrFormat, width, height,
                            AudioCodec, audioSampleRate, audioChannels>& audioVideoMuxer)
     {
+        Medium& m = audioVideoMuxer;
+        setDistanceFromInputVideoFrameFactory(m, 1);        
+        setInputVideoFrameFactoryId(m, mId);
+        setStatusInPipe(m, READY);
+        
         try
         {
-            audioVideoMuxer.takeMuxableFrame(grabNextFrame());
+            audioVideoMuxer.mux(grabNextFrame());            
         }
-        catch (const MediaException& mediaException)
+        catch (const MediumException& mediumException)
         {
-            // Do nothing, because the streamer is at the end of the pipe
-            audioVideoMuxer.mMediaStatusInPipe = mediaException.cause();
+            setStatusInPipe(m, NOT_READY);            
         }
         return audioVideoMuxer;
     }
 
     /*!
-     *  \exception MediaException(MEDIA_NO_DATA)
+     *  \exception MediumException
      */
     VideoFrame<CodecOrFormat, width, height>& grabNextFrame()
-    {
-        // TODO: it should throw another exception, but ok...
+    {        
+        Medium::mOutputStatus  = NOT_READY;    
+        mGrabbedVideoFrame.mFactoryId = Medium::mId;            
+        Medium::mDistanceFromInputVideoFrameFactory = 1;        
+        Medium::mInputVideoFrameFactoryId = "V4LDEV";
+        
         if (mUnrecoverableState)
-            throw MediaException(MEDIA_NO_DATA);
+            throw MediumException(INPUT_NOT_READY);
 
+        if (Medium::mInputStatus == PAUSED)
+            throw MediumException(MEDIUM_PAUSED);
+        
         if (mFd == -1)
         {
-            if (openDevice())
+            try
             {
+                mInputStatus  = NOT_READY;          
+                openDevice();
                 configureDevice();
                 if (!mUnrecoverableState)
                 {
                     configureImageToCapture();
                     if (mFd == -1)
-                        throw MediaException(MEDIA_NO_DATA);
+                    {
+                        throw MediumException(INPUT_NOT_READY);
+                    }
                 }
                 if (!mUnrecoverableState)
                     initMmap();
                 if (!mUnrecoverableState)
+                {
                     startCapturing();
+                    mInputStatus  = READY;
+                }
             }
-            else
-                throw MediaException(MEDIA_NO_DATA);
+            catch (V4LDeviceError err)
+            {
+                throw MediumException(INPUT_NOT_READY);
+            }
         }
 
         if (!mNewVideoFrameAvailable)
@@ -377,13 +449,25 @@ public:
             {
                 observeEventsOn(mFd);
             }
-            throw MediaException(MEDIA_NO_DATA);
+            mOutputStatus = NOT_READY;
+            throw MediumException(OUTPUT_NOT_READY);
         }
         else
         {
-            fillVideoFrameAndAskDriverToBufferData(mGrabbedVideoFrame);
+            try
+            {
+                fillVideoFrameAndAskDriverToBufferData(mGrabbedVideoFrame);
+            }            
+            catch (V4LDeviceError err)
+            {
+                throw MediumException(INPUT_NOT_READY);
+            }
             setPts(mGrabbedVideoFrame);
             mNewVideoFrameAvailable = false;
+            mInputStatus  = READY;
+            mOutputStatus = READY;
+            if (std::is_same<CodecOrFormat, MJPEG>())
+                mGrabbedVideoFrame.mLibAVFlags = AV_PKT_FLAG_KEY;
             return mGrabbedVideoFrame;
         }
     }
@@ -401,69 +485,49 @@ public:
     std::string getV4LErrorString() const
     {
         std::string ret = "";
-        switch(mV4LError)
-        {
-        case V4L_NO_ERROR:
+
+        if (mV4LError == V4L_NO_ERROR)
             ret = "V4L_NO_ERROR";
-            break;
-        case VIDIOC_DQBUF_ERROR:
+        if (mV4LError == VIDIOC_DQBUF_ERROR)
             ret = "VIDIOC_DQBUF_ERROR";
-            break;
-        case VIDIOC_QBUF_ERROR:
+        if (mV4LError == VIDIOC_QBUF_ERROR)
             ret = "VIDIOC_QBUF_ERROR";
-            break;
-        case VIDIOC_STREAMON_ERROR:
+        if (mV4LError == VIDIOC_STREAMON_ERROR)
             ret = "VIDIOC_STREAMON_ERROR";
-            break;
-        case VIDIOC_REQBUFS_ERROR:
+        if (mV4LError == VIDIOC_REQBUFS_ERROR)
             ret = "VIDIOC_REQBUFS_ERROR";
-            break;
-        case INSUFFICIENT_BUFFER_MEMORY_ERROR:
+        if (mV4LError == INSUFFICIENT_BUFFER_MEMORY_ERROR)
             ret = "INSUFFICIENT_BUFFER_MEMORY_ERROR";
-            break;
-        case VIDIOC_QUERYBUF_ERROR:
+        if (mV4LError == VIDIOC_QUERYBUF_ERROR)
             ret = "VIDIOC_QUERYBUF_ERROR";
-            break;
-        case MMAP_ERROR:
+        if (mV4LError == MMAP_ERROR)
             ret = "MMAP_ERROR";
-            break;
-        case V4L_MMAP_UNSUPPORTED_ERROR:
+        if (mV4LError == V4L_MMAP_UNSUPPORTED_ERROR)
             ret = "V4L_MMAP_UNSUPPORTED_ERROR";
-            break;
-        case VIDIOC_S_FMT_ERROR:
+        if (mV4LError == VIDIOC_S_FMT_ERROR)
             ret = "VIDIOC_S_FMT_ERROR";
-            break;
-        case VIDIOC_S_PARM_ERROR:
+        if (mV4LError == VIDIOC_S_PARM_ERROR)
             ret = "VIDIOC_S_PARM_ERROR";
-            break;
-        case NO_V4L_DEVICE_ERROR:
+        if (mV4LError == NO_V4L_DEVICE_ERROR)
             ret = "NO_V4L_DEVICE_ERROR";
-            break;
-        case VIDIOC_QUERYCAP_ERROR:
+        if (mV4LError == VIDIOC_QUERYCAP_ERROR)
             ret = "VIDIOC_QUERYCAP_ERROR";
-            break;
-        case NO_V4L_CAPTURE_DEVICE_ERROR:
+        if (mV4LError == NO_V4L_CAPTURE_DEVICE_ERROR)
             ret = "NO_V4L_CAPTURE_DEVICE_ERROR";
-            break;
-        case NO_DEVICE_ERROR:
+        if (mV4LError == NO_DEVICE_ERROR)
             ret = "NO_DEVICE_ERROR";
-            break;
-        case NO_RESOURCE_ERROR:
+        if (mV4LError == NO_RESOURCE_ERROR)
             ret = "NO_RESOURCE_ERROR";
-            break;
-        case CONFIG_IMG_TO_CAPTURE_ERROR:
+        if (mV4LError == CONFIG_IMG_TO_CAPTURE_ERROR)
             ret = "CONFIG_IMG_TO_CAPTURE_ERROR";
-            break;
-        case VIDIOC_STREAMOFF_ERROR:
+        if (mV4LError == VIDIOC_STREAMOFF_ERROR)
             ret = "VIDIOC_STREAMOFF_ERROR";
-            break;
-        }
         return ret;
     }
 
-    enum DeviceStatus status() const
+    enum DeviceStatus deviceStatus() const
     {
-        return mStatus;
+        return mDeviceStatus;
     }
 
     bool isInUnrecoverableState() const
@@ -486,7 +550,7 @@ private:
     }
 
     /*!
-     *  \exception MediaException(MEDIA_NO_DATA)
+     * \exception V4LDeviceError
      */
     void fillVideoFrameAndAskDriverToBufferData(EncodedVideoFrame& videoFrame)
     {
@@ -500,19 +564,21 @@ private:
             switch (errno)
             {
                 case EAGAIN:
-                    // Should not happen (because already catched
+                    // Should not happen (because already caught
                     // by the events manager)... anyway...
-                    throw MediaException(MEDIA_NO_DATA);
+                    mV4LError = V4L_EAGAIN;
+                    mErrno = errno;                    
+                    throw mV4LError;
                 case EIO:
                 // Could ignore EIO, see spec
                 // fall through
                 default:
-                    mStatus = DEV_DISCONNECTED;
+                    mDeviceStatus = DEV_DISCONNECTED;
                     mV4LError = VIDIOC_DQBUF_ERROR;
                     mErrno = errno;
                     stopCapture();
                     closeDeviceAndReleaseMmap();
-                    return;
+                    throw mV4LError;
             }
         }
 
@@ -530,7 +596,7 @@ private:
 
         mV4LError = V4L_NO_ERROR;
         mErrno = 0;
-        mStatus = DEV_CAN_GRAB;
+        mDeviceStatus = DEV_CAN_GRAB;
 
         memcpy(mEncodedFramesBuffer[mEncodedFramesBufferOffset],
                mBuffersFormVideoFrame[buf.index].get(), buf.bytesused);
@@ -554,12 +620,12 @@ private:
             mV4LError = VIDIOC_QBUF_ERROR;
             mErrno = errno;
             mUnrecoverableState = true;
-            return;
+            throw mV4LError;
         }
     }
 
     /*!
-     *  \exception MediaException(MEDIA_NO_DATA)
+     * \exception V4LDeviceError
      */
     void fillVideoFrameAndAskDriverToBufferData(PackedRawVideoFrame& videoFrame)
     {
@@ -575,17 +641,19 @@ private:
             case EAGAIN:
                 // Should not happen (because
                 // already caught by the events manager)... anyway...
-                throw MediaException(MEDIA_NO_DATA);
+                mV4LError = V4L_EAGAIN;
+                mErrno = errno;
+                throw mV4LError;
             case EIO:
             // Could ignore EIO, see spec
             // fall through
             default:
                 mV4LError = VIDIOC_DQBUF_ERROR;
                 mErrno = errno;
-                mStatus = DEV_DISCONNECTED;
+                mDeviceStatus = DEV_DISCONNECTED;
                 stopCapture();
                 closeDeviceAndReleaseMmap();
-                return;
+                throw mV4LError;
             }
         }
 
@@ -604,7 +672,7 @@ private:
 
         mV4LError = V4L_NO_ERROR;
         mErrno = 0;
-        mStatus = DEV_CAN_GRAB;
+        mDeviceStatus = DEV_CAN_GRAB;
         videoFrame.assignDataSharedPtr(mBuffersFormVideoFrame[buf.index]);
         videoFrame.setSize(buf.bytesused);
         if (!thereAreEventsPendingOn(mFd))
@@ -617,11 +685,14 @@ private:
             mV4LError = VIDIOC_QBUF_ERROR;
             mErrno = errno;
             mUnrecoverableState = true;
-            return;
+            throw mV4LError;
         }
     }
 
-    bool startCapturing()
+    /*!
+     * \exception V4LDeviceError
+     */    
+    void startCapturing()
     {
         unsigned int i;
         enum v4l2_buf_type type;
@@ -643,7 +714,7 @@ private:
                 mV4LError = VIDIOC_QBUF_ERROR;
                 mErrno = errno;
                 mUnrecoverableState = true;
-                return false;
+                throw mV4LError;
             }
         }
         if (-1 == V4LUtils::xioctl(mFd, VIDIOC_STREAMON, &type))
@@ -651,17 +722,18 @@ private:
             mV4LError = VIDIOC_STREAMON_ERROR;
             mErrno = errno;
             mUnrecoverableState = true;
-            return false;
+            throw mV4LError;
         }
-
         mStreamOn = true;
         mV4LError = V4L_NO_ERROR;
         mErrno = 0;
-        mStatus = DEV_CAN_GRAB;
-        return true;
+        mDeviceStatus = DEV_CAN_GRAB;
     }
 
-    bool initMmap()
+    /*!
+     * \exception V4LDeviceError
+     */    
+    void initMmap()
     {
         struct v4l2_requestbuffers req;
         CLEAR(req);
@@ -676,14 +748,14 @@ private:
                 mV4LError = V4L_MMAP_UNSUPPORTED_ERROR;
                 mErrno = errno;
                 mUnrecoverableState = true;
-                return false;
+                throw mV4LError;
             }
             else
             {
                 mV4LError = VIDIOC_REQBUFS_ERROR;
                 mErrno = errno;
                 mUnrecoverableState = true;
-                return false;
+                throw mV4LError;
             }
         }
 
@@ -692,7 +764,7 @@ private:
             mV4LError = INSUFFICIENT_BUFFER_MEMORY_ERROR;
             mErrno = errno;
             mUnrecoverableState = true;
-            return false;
+            throw mV4LError;
         }
 
         mBuffers.resize(req.count);
@@ -710,7 +782,7 @@ private:
                 mV4LError = VIDIOC_QUERYBUF_ERROR;
                 mErrno = errno;
                 mUnrecoverableState = true;
-                return false;
+                throw mV4LError;
             }
             mBuffers[mNumOfBuffers].length = buf.length;
             mBuffers[mNumOfBuffers].start =
@@ -725,7 +797,7 @@ private:
                 mV4LError = MMAP_ERROR;
                 mErrno = errno;
                 mUnrecoverableState = true;
-                return false;
+                throw mV4LError;
             }
 
             unsigned char* videoFrameDataPtr = (unsigned char* )mBuffers[mNumOfBuffers].start;
@@ -736,16 +808,18 @@ private:
             };
             mBuffersFormVideoFrame.push_back(ShareableVideoFrameData(videoFrameDataPtr, releaseMmap));
         }
-        return true;
     }
 
-    bool configureImageToCapture()
+    /*!
+     * \exception V4LDeviceError
+     */    
+    void configureImageToCapture()
     {
         struct v4l2_format fmt;
         CLEAR(fmt);
         fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-        fmt.fmt.pix.width       = width;
-        fmt.fmt.pix.height      = height;
+        fmt.fmt.pix.width       = width::value;
+        fmt.fmt.pix.height      = height::value;
         fmt.fmt.pix.pixelformat = V4LUtils::translatePixelFormat<CodecOrFormat>();
         fmt.fmt.pix.field       = V4L2_FIELD_INTERLACED;
 
@@ -754,7 +828,7 @@ private:
             mV4LError = VIDIOC_S_FMT_ERROR;
             mErrno = errno;
             mUnrecoverableState = true;
-            return false;
+            throw mV4LError;
         }
 
         CLEAR(fmt);
@@ -764,18 +838,18 @@ private:
             mV4LError = VIDIOC_S_FMT_ERROR;
             mErrno = errno;
             mUnrecoverableState = true;
-            return false;
+            throw mV4LError;
         }
 
-        if (fmt.fmt.pix.width != width || fmt.fmt.pix.height != height)
+        if (fmt.fmt.pix.width != width::value || fmt.fmt.pix.height != height::value)
         {
             mV4LError = CONFIG_IMG_TO_CAPTURE_ERROR;
             mErrno = 0;
             closeDeviceAndReleaseMmap();
-            return false;
+            throw mV4LError;
         }
 
-        if (mFps != 0)
+        if (mFps > 0)
         {
             struct v4l2_streamparm param;
             CLEAR(param);
@@ -787,13 +861,15 @@ private:
                 mV4LError = VIDIOC_S_PARM_ERROR;
                 mErrno = errno;
                 mUnrecoverableState = true;
-                return false;
+                throw mV4LError;
             }
         }
-        return true;
     }
 
-    bool configureDevice()
+    /*!
+     * \exception V4LDeviceError
+     */    
+    void configureDevice()
     {
         struct v4l2_capability cap;
         struct v4l2_cropcap cropcap;
@@ -806,14 +882,14 @@ private:
                 mUnrecoverableState = true;
                 mV4LError = NO_V4L_DEVICE_ERROR;
                 mErrno = errno;
-                return false;
+                throw mV4LError;
             }
             else
             {
                 mV4LError = VIDIOC_QUERYCAP_ERROR;
                 mErrno = errno;
                 mUnrecoverableState = true;
-                return false;
+                throw mV4LError;
             }
         }
 
@@ -822,7 +898,7 @@ private:
             mV4LError = NO_V4L_CAPTURE_DEVICE_ERROR;
             mErrno = errno;
             mUnrecoverableState = true;
-            return false;
+            throw mV4LError;
         }
 
         CLEAR(cropcap);
@@ -850,11 +926,13 @@ private:
         {
             // Errors ignored.
         }
-        mStatus = DEV_CONFIGURED;
-        return true;
+        mDeviceStatus = DEV_CONFIGURED;
     }
 
-    bool openDevice()
+    /*!
+     * \exception V4LDeviceError
+     */    
+    void openDevice()
     {
         struct stat st;
 
@@ -862,7 +940,7 @@ private:
         {
             mV4LError = NO_RESOURCE_ERROR;
             mErrno = errno;
-            return false;
+            throw mV4LError;
         }
 
         if (!S_ISCHR(st.st_mode))
@@ -870,7 +948,7 @@ private:
             mV4LError = NO_DEVICE_ERROR;
             mErrno = errno;
             mUnrecoverableState = true;
-            return false;
+            throw mV4LError;
         }
 
         mFd = open(mDevName.c_str(), O_RDWR | O_NONBLOCK, 0);
@@ -878,13 +956,12 @@ private:
 
         if (-1 == mFd)
         {
-            mStatus = OPEN_DEV_ERROR;
+            mDeviceStatus = OPEN_DEV_ERROR;
             mErrno = errno;
-            return false;
+            throw mV4LError;
         }
         mV4LError = V4L_NO_ERROR;
         mErrno = 0;
-        return true;
     }
 
     void stopCapture()
@@ -910,7 +987,7 @@ private:
             return;
         if (-1 == close(mFd))
         {
-            mStatus = CLOSE_DEV_ERROR;
+            mDeviceStatus = CLOSE_DEV_ERROR;
             mErrno = errno;
         }
         mFd = -1;
@@ -933,7 +1010,7 @@ private:
 
     unsigned int mFps;
     enum V4LDeviceError mV4LError;
-    enum DeviceStatus mStatus;
+    enum DeviceStatus mDeviceStatus;
     int mErrno;
     bool mUnrecoverableState;
     int64_t mLatency;
