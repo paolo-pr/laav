@@ -1,5 +1,5 @@
 /* 
- * Created (11/10/2017) by Paolo-Pr.
+ * Created (3/3/2019) by Paolo-Pr.
  * This file is part of Live Asynchronous Audio Video Library.
  *
  * Live Asynchronous Audio Video Library is free software: you can redistribute it and/or modify
@@ -16,36 +16,17 @@
  * along with Live Asynchronous Audio Video Library.  If not, see <http://www.gnu.org/licenses/>.
  * --------------------------------------------
  *
- * This example grabs raw audio and video from a V4L/ALSA device,
- * encodes raw video to H264 with ZEROLATENCY (H264) tune, encodes 
- * raw audio to AAC and streams audio and video, both together and 
- * separately, over UDP-MPEGTS.
- * See README.md included in this directory.
- * 
- * You can find the ALSAdevice identifier with:
- * 
- *   arecord -L
- * 
- * The streams' UDP ports are:
- *
- *   (MPEGTS - ADTS_AAC) port 8080
- * 
- *   (MPEGTS - H264) port 8081
- * 
- *   (MPEGTS - H264 - ADTS_AAC) port 8082
+ * See README.md
  * 
  */
 
-#include "AlsaGrabber.hpp"
-#include "V4L2Grabber.hpp"
-
-#include <unistd.h>
-
-#define SAMPLE_RATE 44100
-#define WIDTH 640
-#define HEIGHT 480
+#include "LAAV.hpp"
 
 using namespace laav;
+
+typedef UnsignedConstant<48000> SAMPLERATE;
+typedef UnsignedConstant<640> WIDTH;
+typedef UnsignedConstant<480> HEIGHT;
 
 int main(int argc, char** argv)
 {
@@ -53,25 +34,25 @@ int main(int argc, char** argv)
     if (argc < 4) 
     {
         std::cout << "Usage: " << argv[0]
-        << " alsa-device-identifier[i.e: plughw:U0x46d0x819] /path/to/v4l/device receiver_address" 
+        << " alsa-device-identifier[i.e: plughw:U0x46d0x819] /path/to/v4l/device receiverAddress" 
         << std::endl;
         
         return 1;
     }    
     
+    LAAVLogLevel = 1;
     SharedEventsCatcher eventsCatcher = EventsManager::createSharedEventsCatcher();
 
-
-    AlsaGrabber <S16_LE, SAMPLE_RATE, MONO>
+    AlsaGrabber <S16_LE, SAMPLERATE, MONO>
     aGrab(eventsCatcher, argv[1], 128*4);
 
-    FFMPEGAudioConverter <S16_LE, SAMPLE_RATE, MONO, FLOAT_PLANAR, SAMPLE_RATE, STEREO>
+    FFMPEGAudioConverter <S16_LE, SAMPLERATE, MONO, S16_LE, SAMPLERATE, STEREO>
     aConv;
+   
+    FFMPEGOpusEncoder <S16_LE, SAMPLERATE, STEREO>
+    aEnc(OPUS_LOWDELAY, OPUS_DEFAULT_COMPRESSION_LEVEL, OPUS_DEFAULT_BITRATE);
 
-    FFMPEGADTSAACEncoder <SAMPLE_RATE, STEREO>
-    aEnc;
-
-    AudioFrameHolder <ADTS_AAC, SAMPLE_RATE, STEREO>
+    AudioFrameHolder <OPUS, SAMPLERATE, STEREO>
     aFh;
 
     V4L2Grabber <YUYV422_PACKED, WIDTH, HEIGHT>
@@ -81,73 +62,122 @@ int main(int argc, char** argv)
     vConv;
 
     FFMPEGH264Encoder <YUV420_PLANAR, WIDTH, HEIGHT>
-    vEnc(DEFAULT_BITRATE, 25, H264_ULTRAFAST, H264_DEFAULT_PROFILE, H264_ZEROLATENCY);
+    vEnc(DEFAULT_BITRATE, 5, H264_ULTRAFAST, H264_DEFAULT_PROFILE, H264_ZEROLATENCY);
     
     VideoFrameHolder <H264, WIDTH, HEIGHT>
     vFh;    
 
-    UDPAudioVideoStreamer <MPEGTS, H264, WIDTH, HEIGHT, ADTS_AAC, SAMPLE_RATE, STEREO>
-    avStream(argv[3], 8082);
+    UDPAudioStreamer <MPEGTS, OPUS, SAMPLERATE, STEREO>
+    aStream(argv[3], 8082);    
+
+    UDPVideoStreamer <MPEGTS, H264, WIDTH, HEIGHT>
+    vStream(argv[3], 8083);    
     
-    std::cerr << std::endl;
-    std::cerr << "********************************" << std::endl;
-    printCurrDate();
-    std::cerr << "START GRABBING " << std::endl;
-    
+    UDPAudioVideoStreamer <MPEGTS, H264, WIDTH, HEIGHT, OPUS, SAMPLERATE, STEREO>
+    avStream(argv[3], 8084);
+        
+    bool firstVideoFrameGrabbbed = false;
+    bool firstVideoFrameEncoded = false;
+    bool firstVideoFrameStreamed = false;
+    bool firstAudioFrameGrabbed = false;
     bool firstAudioFrameEncoded = false;
+    bool firstAudioFrameStreamed = false;    
+    bool firstAudioVideoFrameStreamed = false;
+      
     int  videoReady = 0;
 
     /*
      * grab some video frames, so to ensure that the v4l device is
      * actually ready to stream
      */
-    while (videoReady < 5)
+    while (videoReady < 5 && !LAAVStop)
     {
         try
         {
             vGrab.grabNextFrame();          
             videoReady++;
         }
-        catch (const MediaException& me) {}
+        catch (const MediumException& me) {}
         eventsCatcher->catchNextEvent();        
-    }
+    }    
     
-    while (1)
+    while (!LAAVStop)
     {
-
-        aGrab >> aConv >> aEnc >> aFh;
-
-        try
-        {
-            AudioFrame <ADTS_AAC, SAMPLE_RATE, STEREO>& encodedAudioFrame = aFh.get();          
-            printCurrDate();
-            if (firstAudioFrameEncoded)
-                std::cerr << "AUDIO ENCODER   size="; 
-            else
-                std::cerr << "FIRST ENCODED AUDIO FRAME  size=";
-            
-            std::cerr << encodedAudioFrame.size()            
-                      << std::endl << std::endl;
-                      
-            firstAudioFrameEncoded = true;
-        } 
-        catch (const MediaException& me) {}
-
+        aGrab >> aConv >> aEnc >> aFh;        
+                                  aFh >> aStream;
                                   aFh >> avStream;
 
-        vGrab >> vConv >> vEnc >> vFh;                                  
-                                  
+        vGrab >> vConv >> vEnc >> vFh; 
+                                  vFh >> vStream;
+                                  vFh >> avStream;
+                         
+        if (vGrab.outputStatus() == READY && !firstVideoFrameGrabbbed)
+        {
+            printCurrDate();
+            std::cerr << " [VIDEO] Grabbed first frame " << std::endl; 
+            firstVideoFrameGrabbbed = true;
+        }
+        
+        if (vEnc.outputStatus() == READY && !firstVideoFrameEncoded)
+        {
+            printCurrDate();
+            std::cerr << " [VIDEO] Encoded first frame " << std::endl; 
+            firstVideoFrameEncoded = true;
+        }
+        
+        if (vStream.outputStatus() == READY && !firstVideoFrameStreamed)
+        {
+                printCurrDate();
+                std::cerr << " [VIDEO] Streamed first frame" << std::endl; 
+                firstVideoFrameStreamed = true;
+        } 
+        
+        if (aGrab.outputStatus() == READY && !firstAudioFrameGrabbed)
+        {
+            printCurrDate();
+            std::cerr << " [AUDIO] Grabbed first frame " << std::endl; 
+            firstAudioFrameGrabbed = true;
+        }
+        
+        if (aEnc.outputStatus() == READY && !firstAudioFrameEncoded)
+        {
+            printCurrDate();
+            std::cerr << " [AUDIO] Encoded first frame " << std::endl; 
+            firstAudioFrameEncoded = true;
+        }
+        
+        if (aStream.outputStatus() == READY && !firstAudioFrameStreamed)
+        {
+            printCurrDate();
+            std::cerr << " [AUDIO] Streamed first frame" << std::endl; 
+            firstAudioFrameStreamed = true;
+        }         
+        
+        if (avStream.outputStatus() == READY && !firstAudioVideoFrameStreamed)
+        {
+            printCurrDate();
+            std::cerr << " [AUDIO + VIDEO] Streamed first frame" << std::endl; 
+            firstAudioVideoFrameStreamed = true;
+        }         
+        
         try
         {
-            VideoFrame <H264, WIDTH, HEIGHT>& encodedVideoFrame = vFh.get();
+            AudioFrame<OPUS, SAMPLERATE, STEREO> encodedAudioFrame =  aFh.get();
             printCurrDate();
-            std::cerr << "VIDEO ENCODER   size=" << (encodedVideoFrame.size()+7)            
-                      << std::endl << std::endl;
+            std::cerr << " [AUDIO] Encoded data: size=" << encodedAudioFrame.size() << 
+            " ts=" << encodedAudioFrame.monotonicTimestamp() << std::endl;
         } 
-        catch (const MediaException& me) {}                                  
-
-                                  vFh >> avStream;
-
+        catch (const MediumException& me) {}     
+        
+        try
+        {
+            VideoFrame<H264, WIDTH, HEIGHT> encodedVideoFrame =  vFh.get();
+            printCurrDate();
+            std::cerr << " [VIDEO] Encoded data: size=" << encodedVideoFrame.size() << 
+            " ts=" << encodedVideoFrame.monotonicTimestamp() << std::endl;
+        } 
+        catch (const MediumException& me) {}        
+        
         eventsCatcher->catchNextEvent();
     }
 
