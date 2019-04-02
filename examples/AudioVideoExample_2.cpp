@@ -143,7 +143,7 @@ int main(int argc, char** argv)
         else
             showVideoGrabError = true;
 
-        if (aGrab.status() != DEV_CAN_GRAB)
+        if (aGrab.deviceStatus() != DEV_CAN_GRAB)
         {
             if (showAudioGrabError)
             {
