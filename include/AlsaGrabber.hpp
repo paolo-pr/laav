@@ -324,7 +324,7 @@ public:
         return ret;
     }
 
-    enum DeviceStatus status() const
+    enum DeviceStatus deviceStatus() const
     {
         return mDeviceStatus;
     }
