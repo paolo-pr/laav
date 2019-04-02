@@ -17,7 +17,7 @@ The system is composed as follows:
 
 ![Image](olss-player.png)
 
-* Module (4A) does not introduce significant latency.
+* Modules (3A) and (4A) do not introduce significant latency.
 * Module's (1) latency depends on the network latency/jitter. Late UDP packets could be dropped by setting blocksize and buffer-size properties on the udpsrc element in OptimumLatencyPlayer. It is suggested to do preliminary tests with both player and streamer on localhost, so to avoid this latency. Note that the player ensures that (1) starts to push frames to (2A) and (2B) only when a first PCR is obtained.
 * Module (4B) introduces latency, here eliminated by setting the "max-threads = 1" property on the gstreamer decoder.
 * Each of the modules (2A), (2B), (3B) introduces the latency of 1 frame (due to a missing feature of gstreamer). Note that a PAT/PMT is sent for each muxed frame, on the streamer's muxer (4), in order to avoid further latency introduced by modules (2A) and (2B) when starting to parse the MPEGTS stream (not sure if it's necessary. Anyway: see the macro PAT_PMT_AT_FRAMES in FFMPEGMuxer.hpp).
