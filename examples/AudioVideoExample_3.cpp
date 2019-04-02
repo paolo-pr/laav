@@ -21,7 +21,7 @@
  * The streams' addressess are printed in the output log.
  * The recorders are controlled by a HTTP server (HTTPCommandsReceiver) 
  * which receives the id of the recorder (RECORDER_ID) or the token "ALL"
- * and (start/stop) rec commands as simple HTTP 
+ * and executes start/stop recording commands as simple HTTP 
  * request strings.
  * 
  * The HTTP commands can be sent with cURL utility:
