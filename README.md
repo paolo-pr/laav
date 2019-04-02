@@ -51,7 +51,7 @@ g++ -Wall -std=c++11 -DLINUX -o YourProgram YourProgram.cpp `pkg-config --libs l
 ```
 doxygen Doxyfile
 ```
-The library has been tested with the **[VLC](http://www.videolan.org/)** and **[FFPLAY](https://ffmpeg.org/)** and **[MPV](https://mpv.io/)** media players, but other players should work as well.
+The library has been tested with the **[VLC](http://www.videolan.org/)**, **[FFPLAY](https://ffmpeg.org/)** and **[MPV](https://mpv.io/)** media players, but other players should work as well.
 In order to reduce the network streams' latency, use the following flags on the client side:
 
 VLC (tested with v2.2.4: set a low value for --network-caching flag):
