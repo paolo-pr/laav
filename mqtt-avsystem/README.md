@@ -23,10 +23,11 @@ Recording/streaming system MQTT full-compliant. Particularly useful for home-aut
     (where "---" is the separator token between the three fields).<br>
     Possible commands are:
 
-    1. **Start/Stop recording**<br>    
+    1. **Start/Stop recording**<br>
        ID = Recorder id (in this case:  "Cam1-Recorder-HQ" or "Cam1-Recorder-LQ"<br>
        REQUEST = Rec<br>
        VALUE = 1 (start recording) or 0 (stop recording)<br>   
+       
     2. **Set Bitrate** (works on H264 encoders)<br>
        ID = Encoder id (in this case:  "Cam1-Encoder-HQ" or "Cam1-Encoder-LQ"<br>
        REQUEST = Bitrate<br>
