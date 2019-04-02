@@ -21,7 +21,7 @@ The project runs on **Linux** (**ALSA** and **V4L2** devices), but a Windows por
 * All the audio/video tasks are made with **strictly asynchronous** multiple **pipes**, inside one main loop. This allows to create **simple**, **short** (a complete live H264 grabber/streamer can be made with less than 40 lines of code, see **[THIS](https://github.com/paolo-pr/laav/blob/master/examples/VideoExample_1.cpp)** example), **easy to read** and **intuitive** code in which all the pipes can be realized through overloaded operators, in the following form:
 
 ```
-while (1)
+while (!LAAVStop)
 {
     // Pipe
     grabber >> converter >> encoder >> streamer;
