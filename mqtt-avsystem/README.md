@@ -23,21 +23,24 @@ Recording/streaming system MQTT full-compliant. Particularly useful for home-aut
     (where "---" is the separator token between the three fields).<br>
     Possible commands are:
 
-    1. **Start/Stop recording**<br>
+    1. **Start/Stop recording**<br>    
+```
        ID = Recorder id (in this case:  "Cam1-Recorder-HQ" or "Cam1-Recorder-LQ"<br>
        REQUEST = Rec<br>
        VALUE = 1 (start recording) or 0 (stop recording)<br>
+```       
     2. **Set Bitrate** (works on H264 encoders)<br>
+```    
        ID = Encoder id (in this case:  "Cam1-Encoder-HQ" or "Cam1-Encoder-LQ"<br>
        REQUEST = Bitrate<br>
        VALUE = new birate
-
+```
 * At each (re)connection to the MQTT broker, it will inform about the state of the audio/video device by sending a message on topicPrefix_OUT topic, in the form previously described, with:
-
+```
     ID = Grabber id (in this case:  "Cam1")<br>
     REQUEST = AVDevGrabbing<br>
     VALUE = 0 (not grabbing frames) or 1 (grabbing frames)
-
+```
 * At each (re)connection to the MQTT broker, it will inform about the state of each recorder/encoder by sending 1) and 2) messages on the topicPrefix_OUT topic.
 
 * Each incoming command will be backed up on file (.laavbackup) so to restore the state of the system before any interruption (i.e: power failure)
