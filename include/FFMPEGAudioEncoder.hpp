@@ -620,6 +620,11 @@ private:
         return rawAudioFrame.size<0>();
     }
 
+    unsigned int getPeriodSize(const PackedRawAudioFrame& rawAudioFrame)
+    {
+        return rawAudioFrame.size();
+    }
+    
     void copyRawAudioFrameDataToLibAVFrameData(unsigned int libAVFrameBufferOffset,
                                                const Planar2RawAudioFrame& rawAudioFrame,
                                                unsigned int len, unsigned int rawAudioFrameOffs = 0)
@@ -634,13 +639,6 @@ private:
                    rawAudioFrame.plane<1>(), len);
     }
 
-    unsigned int getPeriodSize(const PackedRawAudioFrame& rawAudioFrame)
-    {
-        return rawAudioFrame.size();
-    }
-
-
-    
     void copyRawAudioFrameDataToLibAVFrameData(unsigned int libAVFrameBufferOffset,
                                                const PackedRawAudioFrame& rawAudioFrame,
                                                unsigned int len, unsigned int rawAudioFrameOffs = 0)
