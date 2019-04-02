@@ -2,7 +2,7 @@
 
 ## ABOUT
 
-Recording/streaming system MQTT full-compliant. Particularly useful for home-automation applications which use the MQTT protocol (for example: **[Home Assistant](https://www.home-assistant.io)**)
+Recording/streaming system MQTT full-compliant. Particularly useful for home-automation applications which use the MQTT protocol (for example: **[Home Assistant](https://www.home-assistant.io)**). It uses the excellent **[MQTT-C library](https://github.com/LiamBindle/MQTT-C)**.
 
 ## HOW IT WORKS
 
@@ -52,7 +52,7 @@ The code of MQTTLAAVSystem can be very easily customized so to work with differe
 
 ## COMPILING / RUNNING
 
-* Just copy the excellent **[MQTT-C library](https://github.com/LiamBindle/MQTT-C)** directory inside this directory (you must have the library's directory tree starting with "MQTT-C" inside this directory) and compile it (see the library's homepage for details).
+* Just copy the **[MQTT-C library](https://github.com/LiamBindle/MQTT-C)** directory inside this directory (you must have the library's directory tree starting with "MQTT-C" inside this directory) and compile it (see the library's homepage for details).
 
 *  Compile MQTTLaavSystem by executing "Compile".
 
