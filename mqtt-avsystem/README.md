@@ -16,7 +16,7 @@ Recording/streaming system template MQTT full-compliant. Particularly useful for
 
 * It creates two video recorders, fed by the two previous encoders, with "**Cam1-Recorder-HQ**" and "**Cam1-Recorder-LQ**" ids.
 
-* It listens for MQTT incoming messages on "topicPrefix_IN" topic, executes commands described in the messages and sends their result on the "topicPrefix_OUT" topic. MQTT commands must be in the form:
+* It listens for MQTT incoming messages on "**topicPrefix_IN**" topic, executes commands described in the messages and sends their result on the "**topicPrefix_OUT**" topic. MQTT commands must be in the form:
 
     **ID---REQUEST---VALUE**
 
