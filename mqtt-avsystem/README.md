@@ -45,7 +45,7 @@ Recording/streaming system template MQTT full-compliant. Particularly useful for
 
 * Each recording will have a name containing the recorder's id and the current date, and it will be fragmented if the file size will exceed MAX_REC_FILESIZE (here set to 100 MB)
 
-* It checks continuously if the streamers and the recorders feed by each encoder are all inactive (no clients connected and no recordings): in this case, it pauses the encoder, so to not stress the CPU, and will re-activate it as soon as at least one of the linked media gets active again.
+* It checks continuously if the streamers and the recorders fed by each encoder are all inactive (no clients connected and no recordings): in this case, it pauses the encoder, so to not stress the CPU, and will re-activate it as soon as at least one of the linked media gets active again.
 
 ## CUSTOMIZE
    
