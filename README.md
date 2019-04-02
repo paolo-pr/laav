@@ -4,7 +4,7 @@
 
 A header-only **C++** library for capturing audio and video from multiple live sources (cameras and microphones) and
 
-* Encoding (video: **H264**, audio: **AAC**, **MP2**, **OPUS**)
+* Encoding (video: **H264**, audio: **AAC**, **MP2** and **OPUS**)
 * Decoding (video: **MJPEG**) / transcoding (video: **MJPEG** -> **H264**)
 * Recording to file (**MPEGTS** and **MATROSKA** containers, audio and/or video)
 * Streaming (**HTTP** and **UDP** protocols for **MPEGTS** and **MATROSKA** containers)
