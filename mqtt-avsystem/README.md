@@ -2,7 +2,7 @@
 
 ## ABOUT
 
-Recording/streaming system MQTT full-compliant. Particularly useful for home-automation applications which use the MQTT protocol (for example: **[Home Assistant](https://www.home-assistant.io)**). It uses the excellent **[MQTT-C library](https://github.com/LiamBindle/MQTT-C)**.
+Recording/streaming system template MQTT full-compliant. Particularly useful for home-automation applications which use the MQTT protocol (for example: **[Home Assistant](https://www.home-assistant.io)**). It uses the excellent **[MQTT-C library](https://github.com/LiamBindle/MQTT-C)**.
 
 ## HOW IT WORKS
 
