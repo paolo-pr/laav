@@ -439,8 +439,7 @@ private:
     {
         throw MediumException(MEDIUM_UNSUPPORTED_REQUEST); 
     }
-    
-    
+     
     // VideoFrameHolder
     template<VIDEOFRAMEHOLDER_TYPENAMES>
     bool requestSpec(bool* fooParam, VideoFrameHolderGeneric& fh, enum LAAVMediumReq req, const std::string& val)
@@ -518,7 +517,6 @@ private:
         else
             throw MediumException(MEDIUM_UNSUPPORTED_REQUEST);  
     }
-    
     
     // VideoFrameHolder
     template<VIDEOFRAMEHOLDER_TYPENAMES>
