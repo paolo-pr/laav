@@ -135,7 +135,10 @@ public:
     {
         return mBufferedConnectionStatus;
     }
-
+    
+    /*!
+    *  \exception MQTTLAAVMsgException
+    */ 
     MQTTLAAVMsg bufferedPublishedINMsg() const
     {
         std::string tokenToCut;
