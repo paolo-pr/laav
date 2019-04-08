@@ -176,8 +176,9 @@ public:
                     struct evbuffer* buf = evbuffer_new();
                     if (this->mWrittenHeaderFlagAndRequests[it->second] == false)
                     {
-                        evbuffer_add(buf, mAudioVideoMuxer.header().c_str(),
-                                     mAudioVideoMuxer.header().size());
+                        if (!std::is_same<Container, MPEGTS>::value)
+                            evbuffer_add(buf, mAudioVideoMuxer.header().c_str(),
+                                         mAudioVideoMuxer.header().size());
 
                         this->mWrittenHeaderFlagAndRequests[it->second] = true;
                     }
