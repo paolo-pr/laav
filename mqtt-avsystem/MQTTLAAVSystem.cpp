@@ -142,8 +142,7 @@ int main(int argc, char** argv)
                 catch (const MediumException& me) {}                  
                 mm.request<bool>(recorderId, START_REC, DEFAULT_REC_FILENAME);
                 std::cout << "Backed up recording status = 1 for " << recorderId << std::endl;
-            }
-                
+            }         
         } 
         catch (const MediumException& me) { }
     }
