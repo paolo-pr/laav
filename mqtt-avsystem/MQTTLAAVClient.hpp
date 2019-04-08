@@ -222,7 +222,7 @@ public:
         strncpy(outMsgCharArr, outMsgStr.c_str(), sizeof(outMsgCharArr));
         outMsgCharArr[sizeof(outMsgCharArr) - 1] = 0;            
         mqtt_publish(&mClient, mTopicOUT.c_str(), 
-                     outMsgCharArr, strlen(outMsgCharArr) + 1, 
+                     outMsgCharArr, outMsgStr.size(), 
                      MQTT_PUBLISH_QOS_0);
     }
 
