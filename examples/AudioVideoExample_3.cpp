@@ -26,7 +26,7 @@
  * 
  * The HTTP commands can be sent with cURL utility:
  * 
- *   (set output filename and start recording)
+ *   (start recording)
  *   curl --data "startRecording=[RECORDER_ID or ALL]" http://127.0.0.1:8094/commands
  * 
  *   (stop recording)
