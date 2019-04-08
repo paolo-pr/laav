@@ -132,7 +132,8 @@ public:
                     struct evbuffer* buf = evbuffer_new();
                     if (this->mWrittenHeaderFlagAndRequests[it->second] == false)
                     {
-                        evbuffer_add(buf, mVideoMuxer.header().c_str(), mVideoMuxer.header().size());
+                        if (!std::is_same<Container, MPEGTS>::value)
+                              evbuffer_add(buf, mVideoMuxer.header().c_str(), mVideoMuxer.header().size());
                         this->mWrittenHeaderFlagAndRequests[it->second] = true;
                     }
                     for (n = 0; n < mVideoMuxer.muxedVideoChunksOffset(); n++)
