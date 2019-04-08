@@ -233,7 +233,8 @@ private:
             this->mInputLibAVFrame->pict_type = AV_PICTURE_TYPE_I;
             mGenerateKeyFrame = false;
         }
-        
+        else
+            this->mInputLibAVFrame->pict_type = AV_PICTURE_TYPE_NONE;        
         
         int ret = avcodec_send_frame(this->mVideoEncoderCodecContext, this->mInputLibAVFrame);
         if (ret == AVERROR(EAGAIN))
