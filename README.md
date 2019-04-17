@@ -2,7 +2,7 @@
 
 ## ABOUT
 
-A header-only **C++** library for capturing audio and video from multiple live sources (cameras and microphones) and
+A header-only **C++** library which wraps FFmpeg, V4L2, ALSA and Libevent for capturing audio and video from multiple live sources (cameras and microphones) and
 
 * Encoding (video: **H264**, audio: **AAC**, **MP2** and **OPUS**)
 * Decoding (video: **MJPEG**) / transcoding (video: **MJPEG** -> **H264**)
