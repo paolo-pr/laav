@@ -12,7 +12,7 @@ A header-only **C++** library for capturing audio and video from multiple live s
 
 The project is useful for building **video surveillance** systems as well, consisting in media servers which stream and record at the same time and which can be controlled through **MQTT** or **HTTP** commands (see **[THIS](https://github.com/paolo-pr/laav/blob/master/mqtt-avsystem/README.md)** and **[THIS](https://github.com/paolo-pr/laav/blob/master/examples/VideoExample_2.cpp)** examples).
 
-It also provides an **[UDP audio (OPUS) + video (H264) streaming system](https://github.com/paolo-pr/laav/blob/master/optimum-latency/README.md)** with the **lowest possible latency**.
+It also provides an **[UDP audio (OPUS) + video (H264) streaming system template](https://github.com/paolo-pr/laav/blob/master/optimum-latency/README.md)** with the **lowest possible latency**.
 
 The project runs on **Linux** (**ALSA** and **V4L2** devices), but a Windows port is planned (any contribution is welcome!).
 
