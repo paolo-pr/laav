@@ -2,7 +2,7 @@
 
 ## ABOUT
 
-A header-only **C++** library which wraps FFmpeg, V4L2, ALSA and Libevent for capturing audio and video from multiple live sources (cameras and microphones) and
+A header-only **C++** library which wraps [FFmpeg](https://ffmpeg.org/), [V4L2](https://linuxtv.org/), [ALSA](https://www.alsa-project.org) and [Libevent](http://libevent.org/) for capturing audio and video from multiple live sources (cameras and microphones) and
 
 * Encoding (video: **H264**, audio: **AAC**, **MP2** and **OPUS**)
 * Decoding (video: **MJPEG**) / transcoding (video: **MJPEG** -> **H264**)
@@ -39,7 +39,7 @@ while (!LAAVStop)
 
 ## COMPILING / RUNNING
 
-Dependencies: **[FFmpeg](https://ffmpeg.org/)** >= 4.1 (tested with 4.1 version), **[libevent](http://libevent.org/)** and pkg-config (optional: see the compile command below).
+Dependencies: **[FFmpeg](https://ffmpeg.org/)** >= 4.1 (tested with 4.1 version), **[Libevent](http://libevent.org/)** and pkg-config (optional: see the compile command below).
 **[FFmpeg](https://ffmpeg.org/)** must be compiled with **[x264](http://www.videolan.org/developers/x264.html)** and **[libopus](http://opus-codec.org/)** support.
 
 * Include the library global header (LAAV.hpp), as shown in the [examples](https://github.com/paolo-pr/laav/tree/master/examples), in YourProgram.cpp and execute:
