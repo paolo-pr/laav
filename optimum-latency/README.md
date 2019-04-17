@@ -1,8 +1,8 @@
-# Optimum Latency Streaming System
+# Optimum Latency Streaming System Template
 
 ## ABOUT
 
-An experimental **UDP** audio (**OPUS**)+ video (**H264**) streaming system (streaming server + client player) with an optimized latency, based on LAAV and Gstreamer.
+An experimental **UDP** audio (**OPUS**)+ video (**H264**) streaming system template (streaming server + client player) with an optimized latency, based on LAAV and Gstreamer.
 The system is composed as follows:
 
 ## Streaming server
