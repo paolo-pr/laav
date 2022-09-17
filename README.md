@@ -39,7 +39,7 @@ while (!LAAVStop)
 
 ## COMPILING / RUNNING
 
-Dependencies: **[FFmpeg](https://ffmpeg.org/)** >= 4.1 (tested with 4.1 version), **[Libevent](http://libevent.org/)** and pkg-config (optional: see the compile command below).
+Dependencies: **[FFmpeg](https://ffmpeg.org/)** (>= 4.1 and < 5.0) (tested with 4.1 version), **[Libevent](http://libevent.org/)** and pkg-config (optional: see the compile command below).
 **[FFmpeg](https://ffmpeg.org/)** needs **[x264](http://www.videolan.org/developers/x264.html)** for H264 support and **[libopus](http://opus-codec.org/)** for OPUS support.
 
 * Include the library global header (LAAV.hpp), as shown in the [examples](https://github.com/paolo-pr/laav/tree/master/examples), in YourProgram.cpp and execute:
