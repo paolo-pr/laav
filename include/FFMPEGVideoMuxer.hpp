@@ -48,20 +48,23 @@ protected:
         unsigned int i;
         for (i = 1; i < encodedVideoFrameBufferSize; i++)
         {
-            AVPacket videoPkt;
+            AVPacket* videoPkt = av_packet_alloc();
             this->mVideoAVPktsToMux.push_back(videoPkt);
         }
 
         for (i = 1; i < encodedVideoFrameBufferSize; i++)
         {
-            av_init_packet(&this->mVideoAVPktsToMux[i]);
-            this->mVideoAVPktsToMux[i].pts = AV_NOPTS_VALUE;
+            //av_init_packet(&this->mVideoAVPktsToMux[i]);
+            this->mVideoAVPktsToMux[i]->pts = AV_NOPTS_VALUE;
         }
                 
     }
 
     ~FFMPEGMuxerVideoImpl()
     {
+        unsigned int i;
+        for (i = 1; i < encodedVideoFrameBufferSize; i++)
+            av_packet_free(&this->mVideoAVPktsToMux[i]);
     }
 
     /*!
@@ -97,23 +100,23 @@ protected:
         int64_t pts;
         pts = av_rescale_q(videoFrameToMux.monotonicTimestamp(), AV_TIME_BASE_Q, this->mMuxerContext->streams[this->mVideoStreamIndex]->time_base);
 
-        this->mVideoAVPktsToMux[this->mVideoAVPktsToMuxOffset].pts = pts;
-        this->mVideoAVPktsToMux[this->mVideoAVPktsToMuxOffset].dts = pts;
+        this->mVideoAVPktsToMux[this->mVideoAVPktsToMuxOffset]->pts = pts;
+        this->mVideoAVPktsToMux[this->mVideoAVPktsToMuxOffset]->dts = pts;
 
-        this->mVideoAVPktsToMux[this->mVideoAVPktsToMuxOffset].stream_index =
+        this->mVideoAVPktsToMux[this->mVideoAVPktsToMuxOffset]->stream_index =
         FFMPEGMuxerCommonImpl<Container>::mVideoStreamIndex;
         //TODO: remove cast ?
-        this->mVideoAVPktsToMux[this->mVideoAVPktsToMuxOffset].data =
+        this->mVideoAVPktsToMux[this->mVideoAVPktsToMuxOffset]->data =
         (uint8_t*)videoFrameToMux.data();
 
-        this->mVideoAVPktsToMux[this->mVideoAVPktsToMuxOffset].size = videoFrameToMux.size();
-        this->mVideoAVPktsToMux[this->mVideoAVPktsToMuxOffset].flags = videoFrameToMux.mLibAVFlags;
-        if (this->mVideoAVPktsToMux[this->mVideoAVPktsToMuxOffset].side_data)
+        this->mVideoAVPktsToMux[this->mVideoAVPktsToMuxOffset]->size = videoFrameToMux.size();
+        this->mVideoAVPktsToMux[this->mVideoAVPktsToMuxOffset]->flags = videoFrameToMux.mLibAVFlags;
+        if (this->mVideoAVPktsToMux[this->mVideoAVPktsToMuxOffset]->side_data)
         {
-            this->mVideoAVPktsToMux[this->mVideoAVPktsToMuxOffset].side_data =
+            this->mVideoAVPktsToMux[this->mVideoAVPktsToMuxOffset]->side_data =
             videoFrameToMux.mLibAVSideData;
 
-            this->mVideoAVPktsToMux[this->mVideoAVPktsToMuxOffset].side_data_elems =
+            this->mVideoAVPktsToMux[this->mVideoAVPktsToMuxOffset]->side_data_elems =
             videoFrameToMux.mLibAVSideDataElems;
         }
 
@@ -129,7 +132,7 @@ protected:
     
     void setParamsFromEmbeddedVideoCodecContext()
     {
-        AVCodec* videoCodec = avcodec_find_encoder(FFMPEGUtils::translateCodec<VideoCodecOrFormat>());
+        const AVCodec* videoCodec = avcodec_find_encoder(FFMPEGUtils::translateCodec<VideoCodecOrFormat>());
         if (!videoCodec)
             printAndThrowUnrecoverableError("AVCodec* videoCodec = avcodec_find_encoder(...)");
 

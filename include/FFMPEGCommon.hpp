@@ -119,7 +119,7 @@ enum AVCodecID FFMPEGUtils::translateCodec<MJPEG>()
     return AV_CODEC_ID_MJPEG;
 }
 template <>
-enum AVCodecID FFMPEGUtils::translateCodec<ADTS_AAC>()
+enum AVCodecID FFMPEGUtils::translateCodec<AAC>()
 {
     return AV_CODEC_ID_AAC;
 }
@@ -135,7 +135,7 @@ enum AVCodecID FFMPEGUtils::translateCodec<OPUS>()
 }
 
 template <>
-const char* FFMPEGUtils::translateContainer<ADTS_AAC>()
+const char* FFMPEGUtils::translateContainer<AAC>()
 {
     return "adts";
 }

@@ -70,7 +70,7 @@ public:
             printAndThrowUnrecoverableError("av_image_alloc(...)");
         av_freep(&mInputLibAVFrame->data[0]);
 
-        AVCodec* rawCodecInput = avcodec_find_decoder(AV_CODEC_ID_RAWVIDEO);
+        const AVCodec* rawCodecInput = avcodec_find_decoder(AV_CODEC_ID_RAWVIDEO);
         mInputCodecContext = avcodec_alloc_context3(rawCodecInput);
         if (!mInputCodecContext)
             printAndThrowUnrecoverableError("mInputCodecContext = avcodec_alloc_context3(...)");
@@ -81,7 +81,7 @@ public:
         if (avcodec_open2(mInputCodecContext, rawCodecInput, NULL) < 0)
             printAndThrowUnrecoverableError("avcodec_open2(...)");
 
-        AVCodec* rawCodecOutput = avcodec_find_decoder(AV_CODEC_ID_RAWVIDEO);
+        const AVCodec* rawCodecOutput = avcodec_find_decoder(AV_CODEC_ID_RAWVIDEO);
         mOutputCodecContext = avcodec_alloc_context3(rawCodecOutput);
         if (!mOutputCodecContext)
             printAndThrowUnrecoverableError("(mOutputCodecContext = avcodec_alloc_context3(...))");
@@ -307,7 +307,7 @@ private:
 
     VideoFrame<ConvertedVideoFrameFormat, outputWidth, outputHeigth> mConvertedVideoFrame;
     AVFrame* mInputLibAVFrame;
-    AVPicture* mInputLibAVPicture;
+    //AVPicture* mInputLibAVPicture;
     ShareableVideoFrameData mConvertedLibAVFrameData0; // packed/plane0
     ShareableVideoFrameData mConvertedLibAVFrameData1; // plane1
     ShareableVideoFrameData mConvertedLibAVFrameData2; // plane2

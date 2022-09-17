@@ -26,7 +26,7 @@ namespace laav
 {
 
 template <typename audioSampleRate, typename audioChannels>
-class FFMPEGADTSAACEncoder : public FFMPEGAudioEncoder<FLOAT_PLANAR, ADTS_AAC,
+class FFMPEGADTSAACEncoder : public FFMPEGAudioEncoder<FLOAT_PLANAR, AAC,
                                                        audioSampleRate, audioChannels>
 {
 

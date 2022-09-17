@@ -53,7 +53,7 @@ The code of MQTTLAAVSystem can be very easily customized so to work with differe
 
 ## COMPILING / RUNNING
 
-* Just copy the **[MQTT-C library](https://github.com/LiamBindle/MQTT-C)** directory inside this directory (you must have the library's directory tree starting with "MQTT-C" inside this directory) and compile it (see the library's homepage for details).
+* Just copy the **[MQTT-C library](https://github.com/LiamBindle/MQTT-C)** directory inside this directory (you must have the library's directory tree starting with "MQTT-C" inside this directory)
 
 *  Compile MQTTLaavSystem by executing "Compile".
 

@@ -47,11 +47,11 @@ public:
         //av_register_all();
         //avcodec_register_all();
 
-        mVideoCodec = avcodec_find_decoder(AV_CODEC_ID_MJPEG);
-        if (!mVideoCodec)
-            printAndThrowUnrecoverableError("mVideoCodec = avcodec_find_decoder(AV_CODEC_ID_MJPEG)");
+        const AVCodec* videoCodec = avcodec_find_decoder(AV_CODEC_ID_MJPEG);
+        if (!videoCodec)
+            printAndThrowUnrecoverableError("videoCodec = avcodec_find_decoder(AV_CODEC_ID_MJPEG)");
 
-        mVideoDecoderCodecContext = avcodec_alloc_context3(mVideoCodec);
+        mVideoDecoderCodecContext = avcodec_alloc_context3(videoCodec);
         if (!mVideoDecoderCodecContext)
             printAndThrowUnrecoverableError("");
         mVideoDecoderCodecContext->codec_id = AV_CODEC_ID_MJPEG;
@@ -60,7 +60,7 @@ public:
         mVideoDecoderCodecContext->time_base = AV_TIME_BASE_Q;
         mVideoDecoderCodecContext->color_range = AVCOL_RANGE_JPEG;
 
-        if (avcodec_open2(mVideoDecoderCodecContext, mVideoCodec, NULL) < 0)
+        if (avcodec_open2(mVideoDecoderCodecContext, videoCodec, NULL) < 0)
             printAndThrowUnrecoverableError("avcodec_open2(...)");
 
         mDecodedLibAVFrame = av_frame_alloc();
@@ -100,11 +100,11 @@ public:
         if (Medium::mInputStatus ==  PAUSED)
             throw MediumException(MEDIUM_PAUSED);
         
-        AVPacket tempPkt;
-        av_init_packet(&tempPkt);
+        AVPacket* tempPkt = av_packet_alloc();
+        //av_init_packet(tempPkt);
 
-        tempPkt.data = (uint8_t* )encodedVideoFrame.data();
-        tempPkt.size = encodedVideoFrame.size();
+        tempPkt->data = (uint8_t* )encodedVideoFrame.data();
+        tempPkt->size = encodedVideoFrame.size();
 
         // This block prevents a continuous warning from libavcodec (from 3.3.3 version)
         // when an APP field with uncorrect length is found in the MJPEG 
@@ -115,20 +115,20 @@ public:
         while (i < encodedVideoFrame.size() - 3)
         {
             // APP field found
-            if (tempPkt.data[i] == 0xff &&
-                (tempPkt.data[i+1] >= 0xe0 && tempPkt.data[i+1] <= 0xef))
+            if (tempPkt->data[i] == 0xff &&
+                (tempPkt->data[i+1] >= 0xe0 && tempPkt->data[i+1] <= 0xef))
             {
                 // bad length found
-                if ( (tempPkt.data[i+3] | tempPkt.data[i+2] << 8 ) < 6)
-                    tempPkt.data[i+1] = 0;
+                if ( (tempPkt->data[i+3] | tempPkt->data[i+2] << 8 ) < 6)
+                    tempPkt->data[i+1] = 0;
             }
             
-            if (tempPkt.data[i] == 0xff && tempPkt.data[i+1] == 0xda ) 
+            if (tempPkt->data[i] == 0xff && tempPkt->data[i+1] == 0xda )
                 break; // // ff da: SOS (start of scanning) field found
             i++;    
         }
        
-        int ret = avcodec_send_packet(mVideoDecoderCodecContext, &tempPkt);
+        int ret = avcodec_send_packet(mVideoDecoderCodecContext, tempPkt);
         // TODO separate send and receive errors? Doesn't seem necessary here...
         ret = avcodec_receive_frame(mVideoDecoderCodecContext, mDecodedLibAVFrame);
         if (ret != 0)
@@ -142,7 +142,8 @@ public:
         mDecodedLibAVFrameData1 = ShareableVideoFrameData(mDecodedLibAVFrame->data[1], freeNothing);
         mDecodedLibAVFrameData2 = ShareableVideoFrameData(mDecodedLibAVFrame->data[2], freeNothing);
         fillDecodedFrame(mDecodedVideoFrame);
-        av_packet_unref(&tempPkt);
+        //av_packet_unref(tempPkt);
+        av_packet_free(&tempPkt);
 
         Medium::mOutputStatus = READY;
         return mDecodedVideoFrame;
@@ -234,7 +235,7 @@ private:
     }
 
     AVCodecContext* mVideoDecoderCodecContext;
-    AVCodec* mVideoCodec;
+    //AVCodec* mVideoCodec;
     AVFrame* mDecodedLibAVFrame;
     VideoFrame< YUV422_PLANAR, width, height > mDecodedVideoFrame;
     ShareableVideoFrameData mDecodedLibAVFrameData0; // packed/plane0

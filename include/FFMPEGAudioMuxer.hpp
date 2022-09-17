@@ -52,14 +52,14 @@ protected:
         unsigned int i;
         for (i = 1; i < encodedAudioFrameBufferSize; i++)
         {
-            AVPacket audioPkt;
+            AVPacket* audioPkt = av_packet_alloc();
             this->mAudioAVPktsToMux.push_back(audioPkt);
         }
 
         for (i = 1; i < encodedAudioFrameBufferSize; i++)
         {
-            av_init_packet(&this->mAudioAVPktsToMux[i]);
-            this->mAudioAVPktsToMux[i].pts = AV_NOPTS_VALUE;
+            //av_init_packet(&this->mAudioAVPktsToMux[i]);
+            this->mAudioAVPktsToMux[i]->pts = AV_NOPTS_VALUE;
         }
 
         //if (startMuxingSoon)
@@ -68,6 +68,9 @@ protected:
 
     ~FFMPEGMuxerAudioImpl()
     {
+        unsigned int i;
+        for (i = 1; i < encodedAudioFrameBufferSize; i++)
+            av_packet_free(&this->mAudioAVPktsToMux[i]);
     }
 
     /*!
@@ -94,16 +97,21 @@ protected:
         av_rescale_q (audioFrameToMux.monotonicTimestamp(), tb,
         this->mMuxerContext->streams[this->mAudioStreamIndex]->time_base);
 
-        this->mAudioAVPktsToMux[this->mAudioAVPktsToMuxOffset].pts = pts;
-        this->mAudioAVPktsToMux[this->mAudioAVPktsToMuxOffset].dts = pts;
-        this->mAudioAVPktsToMux[this->mAudioAVPktsToMuxOffset].stream_index = this->mAudioStreamIndex;
+        this->mAudioAVPktsToMux[this->mAudioAVPktsToMuxOffset]->pts = pts;
+        this->mAudioAVPktsToMux[this->mAudioAVPktsToMuxOffset]->dts = pts;
+        this->mAudioAVPktsToMux[this->mAudioAVPktsToMuxOffset]->stream_index = this->mAudioStreamIndex;
         // TODO: static cast?
-        this->mAudioAVPktsToMux[this->mAudioAVPktsToMuxOffset].data = (uint8_t* )audioFrameToMux.data();
-        this->mAudioAVPktsToMux[this->mAudioAVPktsToMuxOffset].size = audioFrameToMux.size();
-        this->mAudioAVPktsToMux[this->mAudioAVPktsToMuxOffset].flags = audioFrameToMux.mLibAVFlags;
+
+        unsigned offset = 0;
+        if (FFMPEGUtils::translateCodec<AudioCodecOrFormat>() == AV_CODEC_ID_AAC && !std::is_same<Container, MPEGTS>::value)
+            offset = 7;
+        uint8_t* data = (uint8_t* )audioFrameToMux.data();
+        this->mAudioAVPktsToMux[this->mAudioAVPktsToMuxOffset]->data = &data[offset];
+        this->mAudioAVPktsToMux[this->mAudioAVPktsToMuxOffset]->size = audioFrameToMux.size() - offset;
+        this->mAudioAVPktsToMux[this->mAudioAVPktsToMuxOffset]->flags = audioFrameToMux.mLibAVFlags;
 
         this->mAudioAVPktsToMuxOffset =
-        (this->mAudioAVPktsToMuxOffset + 1) % this->mAudioAVPktsToMux.size();
+        (this->mAudioAVPktsToMuxOffset + 1) % (this->mAudioAVPktsToMux.size() - offset);
 
         //if (this->mDoMux)
         {
@@ -115,7 +123,7 @@ protected:
     void setParamsFromEmbeddedAudioCodecContext()
     {
         
-        AVCodec* audioCodec = avcodec_find_encoder(FFMPEGUtils::translateCodec<AudioCodecOrFormat>());
+        const AVCodec* audioCodec = avcodec_find_encoder(FFMPEGUtils::translateCodec<AudioCodecOrFormat>());
         if (!audioCodec)
             printAndThrowUnrecoverableError("AVCodec* audioCodec = avcodec_find_encoder(...);");
 

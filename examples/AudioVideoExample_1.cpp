@@ -65,13 +65,13 @@ int main(int argc, char** argv)
     FFMPEGADTSAACEncoder <SAMPLERATE, STEREO>
     aEnc;
 
-    AudioFrameHolder <ADTS_AAC, SAMPLERATE, STEREO>
+    AudioFrameHolder <AAC, SAMPLERATE, STEREO>
     aFh;
 
-    HTTPAudioStreamer <MPEGTS, ADTS_AAC, SAMPLERATE, STEREO>
+    HTTPAudioStreamer <MPEGTS, AAC, SAMPLERATE, STEREO>
     aStream_1(eventsCatcher, addr, 8080);
 
-    HTTPAudioStreamer <MATROSKA, ADTS_AAC, SAMPLERATE, STEREO>
+    HTTPAudioStreamer <MATROSKA, AAC, SAMPLERATE, STEREO>
     aStream_2(eventsCatcher, addr, 8081, aEnc);    
     
     V4L2Grabber <MJPEG, WIDTH, HEIGHT>
@@ -98,10 +98,10 @@ int main(int argc, char** argv)
     HTTPVideoStreamer <MATROSKA, MJPEG, WIDTH, HEIGHT>
     vStream_2(eventsCatcher, addr, 8083);
 
-    HTTPAudioVideoStreamer <MPEGTS, H264, WIDTH, HEIGHT, ADTS_AAC, SAMPLERATE, STEREO>
+    HTTPAudioVideoStreamer <MPEGTS, H264, WIDTH, HEIGHT, AAC, SAMPLERATE, STEREO>
     avStream_1(eventsCatcher, addr, 8084);
 
-    HTTPAudioVideoStreamer <MATROSKA, MJPEG, WIDTH, HEIGHT, ADTS_AAC, SAMPLERATE, STEREO>
+    HTTPAudioVideoStreamer <MATROSKA, MJPEG, WIDTH, HEIGHT, AAC, SAMPLERATE, STEREO>
     avStream_2(eventsCatcher, addr, 8085, aEnc);
 
     while (!LAAVStop)

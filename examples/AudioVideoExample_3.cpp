@@ -83,7 +83,7 @@ int main(int argc, char** argv)
     AudioFrameHolder <S16_LE, SAMPLERATE, MONO>
     aFh_1;    
     
-    AudioFrameHolder <ADTS_AAC, SAMPLERATE, STEREO>
+    AudioFrameHolder <AAC, SAMPLERATE, STEREO>
     aFh_1_1;    
     
     AudioFrameHolder <MP2, SAMPLERATE, STEREO>
@@ -110,11 +110,11 @@ int main(int argc, char** argv)
     FFMPEGOpusEncoder <S16_LE, SAMPLERATE, STEREO>
     aEnc_3;    
 
-    FFMPEGAudioMuxer <MPEGTS, ADTS_AAC, SAMPLERATE, STEREO>
-    aMux_1("MPEGTS-AAC");    
+    FFMPEGAudioMuxer <MPEGTS, AAC, SAMPLERATE, STEREO>
+    aMux_1("MPEGTS-AAC");
     
-    FFMPEGAudioMuxer <MATROSKA, ADTS_AAC, SAMPLERATE, STEREO>
-    aMux_2(aEnc_1, "MATROSKA-AAC");   
+    FFMPEGAudioMuxer <MATROSKA, AAC, SAMPLERATE, STEREO>
+    aMux_2(aEnc_1, "MATROSKA-AAC");
     
     FFMPEGAudioMuxer <MPEGTS, MP2, SAMPLERATE, STEREO>
     aMux_3("MPEGTS-MP2");
@@ -134,28 +134,28 @@ int main(int argc, char** argv)
     FFMPEGVideoMuxer <MATROSKA, H264, WIDTH, HEIGHT>
     vMux_2(vEnc, "MATROSKA-H264");    
 
-    FFMPEGAudioVideoMuxer <MPEGTS, H264, WIDTH, HEIGHT, ADTS_AAC, SAMPLERATE, STEREO>
-    avMux_1("MPEGTS-H264-AAC");       
+    FFMPEGAudioVideoMuxer <MPEGTS, H264, WIDTH, HEIGHT, AAC, SAMPLERATE, STEREO>
+    avMux_1("MPEGTS-AAC-H264");
     
-    FFMPEGAudioVideoMuxer <MATROSKA, H264, WIDTH, HEIGHT, ADTS_AAC, SAMPLERATE, STEREO>
-    avMux_2(aEnc_1, vEnc, "MATROSKA-H264-AAC");    
+    FFMPEGAudioVideoMuxer <MATROSKA, H264, WIDTH, HEIGHT, AAC, SAMPLERATE, STEREO>
+    avMux_2(aEnc_1, vEnc, "MATROSKA-AAC-H264");
   
     FFMPEGAudioVideoMuxer <MPEGTS, H264, WIDTH, HEIGHT, MP2, SAMPLERATE, STEREO>
-    avMux_3("MPEGTS-H264-MP2");    
+    avMux_3("MPEGTS-MP2-H264");
     
     FFMPEGAudioVideoMuxer <MATROSKA, H264, WIDTH, HEIGHT, MP2, SAMPLERATE, STEREO>
-    avMux_4(aEnc_2, vEnc, "MATROSKA-H264-MP2"); 
+    avMux_4(aEnc_2, vEnc, "MATROSKA-MP2-H264");
     
     FFMPEGAudioVideoMuxer <MPEGTS, H264, WIDTH, HEIGHT, OPUS, SAMPLERATE, STEREO>
-    avMux_5("MPEGTS-H264-OPUS");    
+    avMux_5("MPEGTS-OPUS-H264");
     
     FFMPEGAudioVideoMuxer <MATROSKA, H264, WIDTH, HEIGHT, OPUS, SAMPLERATE, STEREO>
-    avMux_6(aEnc_3, vEnc,"MATROSKA-H264-OPUS");    
+    avMux_6(aEnc_3, vEnc,"MATROSKA-OPUS-H264");
     
-    HTTPAudioStreamer <MPEGTS, ADTS_AAC, SAMPLERATE, STEREO>
+    HTTPAudioStreamer <MPEGTS, AAC, SAMPLERATE, STEREO>
     aStream_1(eventsCatcher, addr, 8080);
 
-    HTTPAudioStreamer <MATROSKA, ADTS_AAC, SAMPLERATE, STEREO>
+    HTTPAudioStreamer <MATROSKA, AAC, SAMPLERATE, STEREO>
     aStream_2(eventsCatcher, addr, 8087, aEnc_1); 
     
     HTTPAudioStreamer <MPEGTS, MP2, SAMPLERATE, STEREO>
@@ -176,10 +176,10 @@ int main(int argc, char** argv)
     HTTPVideoStreamer <MATROSKA, H264, WIDTH, HEIGHT>
     vStream_2(eventsCatcher, addr, 8090, vEnc);    
     
-    HTTPAudioVideoStreamer <MPEGTS, H264, WIDTH, HEIGHT, ADTS_AAC, SAMPLERATE, STEREO>
+    HTTPAudioVideoStreamer <MPEGTS, H264, WIDTH, HEIGHT, AAC, SAMPLERATE, STEREO>
     avStream_1(eventsCatcher, addr, 8084);
 
-    HTTPAudioVideoStreamer <MATROSKA, H264, WIDTH, HEIGHT, ADTS_AAC, SAMPLERATE, STEREO>
+    HTTPAudioVideoStreamer <MATROSKA, H264, WIDTH, HEIGHT, AAC, SAMPLERATE, STEREO>
     avStream_2(eventsCatcher, addr, 8091, aEnc_1, vEnc); 
     
     HTTPAudioVideoStreamer <MPEGTS, H264, WIDTH, HEIGHT, MP2, SAMPLERATE, STEREO>
@@ -222,14 +222,14 @@ int main(int argc, char** argv)
     {
         /**/aGrab >> aFh_1; 
         /**/         aFh_1 >> aConv_1 >> aEnc_1 >> aFh_1_1;
-        /**/         /**/                          aFh_1_1 >> aMux_1;                  //MPEGTS-AAC 
-        /**/         /**/                          aFh_1_1 >> aMux_2;                  //MATROSKA-AAC       
-        /**/         /**/                          aFh_1_1 >> aStream_1;               //MPEGTS-AAC 
-        /**/         /**/                          aFh_1_1 >> aStream_2;               //MATROSKA-AAC   
+        /**/         /**/                          aFh_1_1 >> aMux_1;                  //MPEGTS-AAC
+        /**/         /**/                          aFh_1_1 >> aMux_2;                  //MATROSKA-AAC
+        /**/         /**/                          aFh_1_1 >> aStream_1;               //MPEGTS-AAC
+        /**/         /**/                          aFh_1_1 >> aStream_2;               //MATROSKA-AAC
         /**/         /**/                          aFh_1_1 >> avMux_1;                 //MPEGTS-H264-AAC
-        /**/         /**/                          aFh_1_1 >> avMux_2;                 //MATROSKA-H264-AAC         
+        /**/         /**/                          aFh_1_1 >> avMux_2;                 //MATROSKA-H264-AAC
         /**/         /**/                          aFh_1_1 >> avStream_1;              //MPEGTS-H264-AAC
-        /**/         /**/                          aFh_1_1 >> avStream_2;              //MATROSKA-H264-AAC        
+        /**/         /**/                          aFh_1_1 >> avStream_2;              //MATROSKA-H264-AAC
         /**/         /**/                      
         /**/         aFh_1 >> aConv_2 >> aFh_1_2; 
         /**/                             aFh_1_2 >> aEnc_2 >> aFh_1_2_1;

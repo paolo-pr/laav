@@ -57,7 +57,7 @@ public:
             
         if (compressionLevel != OPUS_DEFAULT_COMPRESSION_LEVEL)
             this->mAudioEncoderCodecContext->compression_level = compressionLevel;
-        
+
         this->completeEncoderInitialization();
     }
 

@@ -173,9 +173,9 @@ public:
             dateTimeNow.tv_sec * 1000000000 + dateTimeNow.tv_nsec;
 
             mEncodingMonotonicTs[mEncodedAVPacketBufferOffset] = monotonicNow;
-            AVPacket& currPkt = mEncodedAudioPktBuffer[mEncodedAVPacketBufferOffset];
+            AVPacket* currPkt = mEncodedAudioPktBuffer[mEncodedAVPacketBufferOffset];
 
-            int ret2 = avcodec_receive_packet(this->mAudioEncoderCodecContext, &currPkt);
+            int ret2 = avcodec_receive_packet(this->mAudioEncoderCodecContext, currPkt);
             
             // Buffering
             if (ret2 == AVERROR(EAGAIN))
@@ -193,7 +193,7 @@ public:
                 AudioFrame<AudioCodec, audioSampleRate, audioChannels>& currFrame =
                 mEncodedAudioFrameBuffer[mEncodedAudioFrameBufferOffset];
                 
-                AVPacket& encodedPkt = currPkt; //mEncodedAudioPktBuffer[mEncodedAudioFrameBufferOffset];
+                AVPacket* encodedPkt = currPkt; //mEncodedAudioPktBuffer[mEncodedAudioFrameBufferOffset];
 
                 if (FFMPEGUtils::translateCodec<AudioCodec>() == AV_CODEC_ID_AAC)
                 {
@@ -208,10 +208,15 @@ public:
                     mEncodedFrameForAdtsMuxer->mFactoryId = Medium::mId;
                     mEncodedFrameForAdtsMuxer->mDistanceFromFactory =
                     Medium::mDistanceFromInputAudioFrameFactory;
-                    int64_t pts = av_rescale_q(encodedPkt.pts, mAudioEncoderCodecContext->time_base, mAdtsMuxerContext->streams[0]->time_base);
-
-                    encodedPkt.pts = encodedPkt.dts = pts;
-                    if (av_write_frame(mAdtsMuxerContext, &encodedPkt) < 0)
+                    int64_t pts = av_rescale_q(encodedPkt->pts, mAudioEncoderCodecContext->time_base, mAdtsMuxerContext->streams[0]->time_base);
+                    /*
+                    std::cerr << "ENCODED___________________________ \n";
+                    for (int i = 0; i < 12; i++)
+                      std::cerr << (int)encodedPkt->data[i] << " - ";
+                    std::cerr << "\n";
+                    */
+                    encodedPkt->pts = encodedPkt->dts = pts;
+                    if (av_write_frame(mAdtsMuxerContext, encodedPkt) < 0)
                         printAndThrowUnrecoverableError("av_write_frame(...)");
                 }
                 else
@@ -221,9 +226,9 @@ public:
 
                 currFrame.setMonotonicTimestamp(mEncodingMonotonicTs[mEncodedAudioFrameBufferOffset]);
                 currFrame.setDateTimestamp(mEncodingDateTs[mEncodedAudioFrameBufferOffset]);
-                currFrame.mLibAVFlags = encodedPkt.flags;
-                currFrame.mLibAVSideData = encodedPkt.side_data;
-                currFrame.mLibAVSideDataElems = encodedPkt.side_data_elems;                
+                currFrame.mLibAVFlags = encodedPkt->flags;
+                currFrame.mLibAVSideData = encodedPkt->side_data;
+                currFrame.mLibAVSideDataElems = encodedPkt->side_data_elems;
                 currFrame.mFactoryId = Medium::mId;
                 Medium::mInputAudioFrameFactoryId = rawAudioFrame.mFactoryId;                
                 Medium::mDistanceFromInputAudioFrameFactory = rawAudioFrame.mDistanceFromFactory + 1;
@@ -482,11 +487,11 @@ protected:
         //av_register_all();
         //avcodec_register_all();
         
-        mAudioCodec = avcodec_find_encoder(FFMPEGUtils::translateCodec<AudioCodec>() );
-        if (mAudioCodec == NULL)
+        const AVCodec* audioCodec = avcodec_find_encoder(FFMPEGUtils::translateCodec<AudioCodec>() );
+        if (audioCodec == NULL)
             printAndThrowUnrecoverableError("avcodec_find_encoder(...)");
 
-        mAudioEncoderCodecContext = avcodec_alloc_context3(mAudioCodec);
+        mAudioEncoderCodecContext = avcodec_alloc_context3(audioCodec);
         if (mAudioEncoderCodecContext == NULL)
             printAndThrowUnrecoverableError("mAudioEncoderCodecContext =avcodec_alloc_context3(...)");
 
@@ -505,7 +510,8 @@ protected:
 
     void completeEncoderInitialization()
     {
-        if (avcodec_open2(mAudioEncoderCodecContext, mAudioCodec, NULL) < 0)
+        const AVCodec* audioCodec = avcodec_find_encoder(FFMPEGUtils::translateCodec<AudioCodec>() );
+        if (avcodec_open2(mAudioEncoderCodecContext, audioCodec, NULL) < 0)
             printAndThrowUnrecoverableError("avcodec_open2(...)");
 
         mRawInputLibAVFrame = av_frame_alloc();
@@ -524,10 +530,11 @@ protected:
         unsigned int i;
         for (i = 0; i < encodedAudioFrameBufferSize; i++)
         {
-            AVPacket encodedAudioPkt;
-            encodedAudioPkt.size = 0;
+            AVPacket* encodedAudioPkt = av_packet_alloc();
+            encodedAudioPkt->size = 0;
             mEncodedAudioPktBuffer.push_back(encodedAudioPkt);
-            av_init_packet(&mEncodedAudioPktBuffer[i]);
+            //mEncodedAudioPktBuffer[i] = av_packet_alloc();
+            //av_init_packet(&mEncodedAudioPktBuffer[i]);
             AudioFrame<AudioCodec, audioSampleRate, audioChannels> encodedAudioFrame;
             encodedAudioFrame.setMonotonicTimeBase(mAudioEncoderCodecContext->time_base);
             mEncodedAudioFrameBuffer.push_back(encodedAudioFrame);
@@ -539,13 +546,13 @@ protected:
         if (FFMPEGUtils::translateCodec<AudioCodec>() == AV_CODEC_ID_AAC)
         {
 
-            mAdtsMuxerFormat = av_guess_format("adts", NULL, NULL);
-            if (!mAdtsMuxerFormat)
-                printAndThrowUnrecoverableError("mAdtsMuxerFormat = av_guess_format(\"adts\" ...)");
+            const AVOutputFormat* adtsMuxerFormat = av_guess_format("adts", NULL, NULL);
+            if (!adtsMuxerFormat)
+                printAndThrowUnrecoverableError("adtsMuxerFormat = av_guess_format(\"adts\" ...)");
 
-            mAdtsMuxerFormat->audio_codec = AV_CODEC_ID_AAC;
+            //adtsMuxerFormat->audio_codec = AV_CODEC_ID_AAC;
 
-            avformat_alloc_output_context2(&mAdtsMuxerContext, mAdtsMuxerFormat, "dummy", NULL);
+            avformat_alloc_output_context2(&mAdtsMuxerContext, adtsMuxerFormat, "dummy", NULL);
             if (!mAdtsMuxerContext)
                 printAndThrowUnrecoverableError("avformat_alloc_output_context2(...)");
 
@@ -581,7 +588,8 @@ protected:
     {
         unsigned int q;
         for (q = 0; q < mEncodedAudioPktBuffer.size(); q++)
-            av_packet_unref(&mEncodedAudioPktBuffer[q]);
+            av_packet_free(&mEncodedAudioPktBuffer[q]);
+
         av_frame_free(&mRawInputLibAVFrame);
         avcodec_free_context(&mAudioEncoderCodecContext);
 
@@ -647,15 +655,15 @@ private:
     }
 
     void fillEncodedAudioFrame(EncodedAudioFrame<AudioCodec>& encodedAudioFrame,
-                               const AVPacket& encodedAvPacket)
+                               const AVPacket* encodedAvPacket)
     {
         auto freeNothing = [](unsigned char* buffer) {  };
-        ShareableAudioFrameData mAudioData = ShareableAudioFrameData(encodedAvPacket.data, freeNothing);
+        ShareableAudioFrameData mAudioData = ShareableAudioFrameData(encodedAvPacket->data, freeNothing);
         encodedAudioFrame.assignDataSharedPtr(mAudioData);
-        encodedAudioFrame.setSize(encodedAvPacket.size);
+        encodedAudioFrame.setSize(encodedAvPacket->size);
     }
 
-    AVCodec* mAudioCodec;
+    //AVCodec* mAudioCodec;
     int64_t mEncodingCurrTime;
     int mCounter;
     int64_t mEncodingStartTime;
@@ -663,7 +671,7 @@ private:
     bool mFillingEncodedAudioFrame;
     unsigned int mRawInputLibAVFrameBufferOffset;
     std::vector<AudioFrame<AudioCodec, audioSampleRate, audioChannels> > mEncodedAudioFrameBuffer;
-    std::vector<AVPacket> mEncodedAudioPktBuffer;
+    std::vector<AVPacket* > mEncodedAudioPktBuffer;
     std::vector<int64_t> mEncodingMonotonicTs;
     std::vector<int64_t> mEncodingDateTs;
     unsigned int mEncodedAudioFrameBufferOffset;
@@ -673,7 +681,7 @@ private:
     // NEEDED FOR AAC ENCODER (ADTS CONTAINER)
     AVFormatContext* mAdtsMuxerContext;
     uint8_t* mAdtsMuxerAVIOContextBuffer;
-    AVOutputFormat* mAdtsMuxerFormat;
+    //AVOutputFormat* mAdtsMuxerFormat;
     AVIOContext* mAdtsMuxerAVIOContext;
     AVStream* mAdtsAudioStream;
     bool mAdtsHeaderWritten;
@@ -686,6 +694,12 @@ private:
         if (chunkSize == 0)
             return 0;
         // TODO: static cast?
+        /*
+        std::cerr << "MUXED___________________________ \n";
+        for (int i = 0; i < 12; i++)
+          std::cerr << (int)muxedDataSink[i] << " - ";
+        std::cerr << "\n";
+        */
 
         FFMPEGAudioEncoder<PCMSoundFormat, AudioCodec, audioSampleRate, audioChannels>* audioEncoder =
         (FFMPEGAudioEncoder<PCMSoundFormat, AudioCodec, audioSampleRate, audioChannels>* )opaque;

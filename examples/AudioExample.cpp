@@ -71,7 +71,7 @@ int main(int argc, char** argv)
     HTTPAudioStreamer <MATROSKA, MP2, SAMPLERATE, MONO>
     aStream_1(eventsCatcher, addr, 8080, aEnc_1);    
 
-    HTTPAudioStreamer <MPEGTS, ADTS_AAC, SAMPLERATE, STEREO>
+    HTTPAudioStreamer <MPEGTS, AAC, SAMPLERATE, STEREO>
     aStream_2(eventsCatcher, addr, 8081);    
     
     while (!LAAVStop)

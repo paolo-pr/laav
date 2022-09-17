@@ -83,8 +83,9 @@ public:
                                 chunksToStream[n].data()+chunksToStream[n].size());
         }
         if (sendto(this->mSock, dataToStream.data(), dataToStream.size(), 0, 
-            (const sockaddr* )&this->mSockAddr, this->mSlen)==-1)
+            (const sockaddr* )&this->mSockAddr, this->mSlen)==-1) {
             printAndThrowUnrecoverableError("UDPVideoStreamer::streamMuxedData(); sendto() error");
+        }
         Medium::mOutputStatus = READY;         
     }
 

@@ -110,6 +110,33 @@ void printCurrDate()
 #endif
 }
 
+#ifdef LINUX
+void printDate(struct timespec& ts)
+{
+    char day[4], mon[4];
+    int wday, hh, mm, ss, year;
+    sscanf(ctime((time_t*) & (ts.tv_sec)), "%s %s %d %d:%d:%d %d",
+           day, mon, &wday, &hh, &mm, &ss, &year);
+    fprintf(stderr, "[ %s %s %d %d:%d:%d %ld ]", day, mon, wday, hh, mm, ss, ts.tv_nsec);
+}
+#endif
+
+#ifdef LINUX
+uint64_t diffDateInMilliseconds(struct timespec& start, struct timespec& end)
+{
+  return difftime(end.tv_sec, start.tv_sec)*1000 + (end.tv_nsec - start.tv_nsec) / 1000000;
+}
+#endif
+
+#ifdef LINUX
+struct timespec getCurrDate()
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    return ts;
+}
+#endif
+
 static unsigned LAAVLogLevel = 0;
 
 class LAAVLogger 
@@ -245,11 +272,11 @@ std::string constantToString<MP2>()
     return "MP2";
 }
 
-class ADTS_AAC;
+class AAC;
 template <>
-std::string constantToString<ADTS_AAC>()
+std::string constantToString<AAC>()
 {
-    return "ADTS_AAC";
+    return "AAC";
 }
 
 class H264;

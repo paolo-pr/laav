@@ -96,11 +96,11 @@ protected:
     {
         //avcodec_register_all();
         VideoEncoder<RawVideoFrameFormat, EncodedVideoFrameCodec, width, height>::mNeedsToBuffer = true;
-        mVideoCodec = avcodec_find_encoder(FFMPEGUtils::translateCodec<EncodedVideoFrameCodec>());
-        if (!mVideoCodec)
-            printAndThrowUnrecoverableError("mVideoCodec = avcodec_find_encoder(...)");
+        const AVCodec* videoCodec = avcodec_find_encoder(FFMPEGUtils::translateCodec<EncodedVideoFrameCodec>());
+        if (!videoCodec)
+            printAndThrowUnrecoverableError("videoCodec = avcodec_find_encoder(...)");
 
-        mVideoEncoderCodecContext = avcodec_alloc_context3(mVideoCodec);
+        mVideoEncoderCodecContext = avcodec_alloc_context3(videoCodec);
         if (!mVideoEncoderCodecContext)
             printAndThrowUnrecoverableError("mVideoEncoderCodecContext = avcodec_alloc_context3(...)");
 
@@ -115,7 +115,7 @@ protected:
         FFMPEGUtils::translatePixelFormat<RawVideoFrameFormat>();
 
         
-        mVideoEncoderCodecContextOutOfBand = avcodec_alloc_context3(mVideoCodec);
+        mVideoEncoderCodecContextOutOfBand = avcodec_alloc_context3(videoCodec);
         if (!mVideoEncoderCodecContextOutOfBand)
             printAndThrowUnrecoverableError("mVideoEncoderCodecContextOutOfBand = avcodec_alloc_context3(...)");
 
@@ -155,10 +155,11 @@ protected:
         unsigned int i;
         for (i = 0; i < encodedVideoFrameBufferSize; i++)
         {
-            AVPacket encodedVideoPkt;
-            encodedVideoPkt.size = 0;
+            AVPacket* encodedVideoPkt = av_packet_alloc();
+            encodedVideoPkt->size = 0;
             mEncodedVideoPktBuffer.push_back(encodedVideoPkt);
-            av_init_packet(&mEncodedVideoPktBuffer[i]);
+            //mEncodedVideoPktBuffer[i] = av_packet_alloc();
+            //av_init_packet(&mEncodedVideoPktBuffer[i]);
         }
 
         for (i = 0; i < encodedVideoFrameBufferSize; i++)
@@ -171,9 +172,10 @@ protected:
 
     void completeEncoderInitialization()
     {
-        if (avcodec_open2(mVideoEncoderCodecContext, mVideoCodec, NULL) < 0)
+        const AVCodec* videoCodec = avcodec_find_encoder(FFMPEGUtils::translateCodec<EncodedVideoFrameCodec>());
+        if (avcodec_open2(mVideoEncoderCodecContext, videoCodec, NULL) < 0)
             printAndThrowUnrecoverableError("avcodec_open2(...)");
-        if (avcodec_open2(mVideoEncoderCodecContextOutOfBand, mVideoCodec, NULL) < 0)
+        if (avcodec_open2(mVideoEncoderCodecContextOutOfBand, videoCodec, NULL) < 0)
             printAndThrowUnrecoverableError("avcodec_open2(...)");        
     }
 
@@ -181,7 +183,7 @@ protected:
     {
         unsigned int q;
         for (q = 0; q < mEncodedVideoPktBuffer.size(); q++)
-            av_packet_unref(&mEncodedVideoPktBuffer[q]);
+            av_packet_free(&mEncodedVideoPktBuffer[q]);
         av_frame_free(&mInputLibAVFrame);
         avcodec_free_context(&mVideoEncoderCodecContext);
         avcodec_free_context(&mVideoEncoderCodecContextOutOfBand);
@@ -192,9 +194,9 @@ protected:
     
 private:
 
-    AVCodec* mVideoCodec;
+    //AVCodec* mVideoCodec;
     AVFrame* mInputLibAVFrame;
-    std::vector<AVPacket> mEncodedVideoPktBuffer;
+    std::vector<AVPacket* > mEncodedVideoPktBuffer;
     bool mGenerateKeyFrame;
 
     /*!
@@ -217,13 +219,13 @@ private:
             this->mEncodingStartTime = av_gettime_relative();
 
         // "this" is wanted by the compiler
-        AVPacket& currEncodedVideoPkt =
+        AVPacket* currEncodedVideoPkt =
         this->mEncodedVideoPktBuffer[this->mEncodedVideoFrameBufferOffset];
 
         VideoFrame<EncodedVideoFrameCodec, width, height>& currEncodedVideoFrame =
         this->mEncodedVideoFrameBuffer[this->mEncodedVideoFrameBufferOffset];
 
-        av_packet_unref(&currEncodedVideoPkt);
+        //av_packet_unref(&currEncodedVideoPkt);
 
         int64_t nowPts = av_gettime_relative();
         this->mInputLibAVFrame->pts = nowPts;
@@ -244,7 +246,7 @@ private:
         else if (ret != 0)
             printAndThrowUnrecoverableError("avcodec_send_frame(...)");
 
-        ret = avcodec_receive_packet(this->mVideoEncoderCodecContext, &currEncodedVideoPkt);
+        ret = avcodec_receive_packet(this->mVideoEncoderCodecContext, currEncodedVideoPkt);
         if (ret == AVERROR(EAGAIN))
             ;
         else if (ret != 0)
@@ -267,14 +269,14 @@ private:
 
             auto freeNothing = [](unsigned char* buffer) {  };
             ShareableVideoFrameData mVideoData =
-            ShareableVideoFrameData(currEncodedVideoPkt.data, freeNothing);
+            ShareableVideoFrameData(currEncodedVideoPkt->data, freeNothing);
 
             currEncodedVideoFrame.assignDataSharedPtr(mVideoData);
-            currEncodedVideoFrame.setSize(currEncodedVideoPkt.size);
-            currEncodedVideoFrame.mLibAVFlags = currEncodedVideoPkt.flags;
+            currEncodedVideoFrame.setSize(currEncodedVideoPkt->size);
+            currEncodedVideoFrame.mLibAVFlags = currEncodedVideoPkt->flags;
             currEncodedVideoFrame.mAVCodecContext = mVideoEncoderCodecContext;
-            currEncodedVideoFrame.mLibAVSideData = currEncodedVideoPkt.side_data;
-            currEncodedVideoFrame.mLibAVSideDataElems = currEncodedVideoPkt.side_data_elems;
+            currEncodedVideoFrame.mLibAVSideData = currEncodedVideoPkt->side_data;
+            currEncodedVideoFrame.mLibAVSideDataElems = currEncodedVideoPkt->side_data_elems;
             int64_t monoPts = this->mInternalMonotonicPtsBuffer[this->mEncodedVideoFrameBufferOffset];
             int64_t datePts = this->mInternalDatePtsBuffer[this->mEncodedVideoFrameBufferOffset];
             currEncodedVideoFrame.setMonotonicTimestamp(monoPts);

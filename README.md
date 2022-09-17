@@ -12,8 +12,6 @@ A header-only **C++** library which wraps [FFmpeg](https://ffmpeg.org/), [V4L2](
 
 The project is useful for building **video surveillance** systems as well, consisting in media servers which stream and record at the same time and which can be controlled through **MQTT** or **HTTP** commands (see **[THIS](https://github.com/paolo-pr/laav/blob/master/mqtt-avsystem/README.md)** and **[THIS](https://github.com/paolo-pr/laav/blob/master/examples/VideoExample_2.cpp)** examples).
 
-It also provides an **[UDP audio (OPUS) + video (H264) streaming system template](https://github.com/paolo-pr/laav/blob/master/optimum-latency/README.md)** with the **lowest possible latency**.
-
 The project runs on **Linux** (**ALSA** and **V4L2** devices), but a Windows port is planned (any contribution is welcome!).
 
 ## FEATURES
@@ -39,7 +37,7 @@ while (!LAAVStop)
 
 ## COMPILING / RUNNING
 
-Dependencies: **[FFmpeg](https://ffmpeg.org/)** (>= 4.1 and < 5.0) (tested with 4.1 version), **[Libevent](http://libevent.org/)** and pkg-config (optional: see the compile command below).
+Dependencies: **[FFmpeg](https://ffmpeg.org/)** >= **5.0** (tested with **5.0** version), **[Libevent](http://libevent.org/)** and pkg-config (optional: see the compile command below).
 **[FFmpeg](https://ffmpeg.org/)** needs **[x264](http://www.videolan.org/developers/x264.html)** for H264 support and **[libopus](http://opus-codec.org/)** for OPUS support.
 
 * Include the library global header (LAAV.hpp), as shown in the [examples](https://github.com/paolo-pr/laav/tree/master/examples), in YourProgram.cpp and execute:

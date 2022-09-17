@@ -24,10 +24,10 @@
 namespace laav
 {
 
-class ADTS_AAC {};
+class AAC {};
 
 template <typename audioSampleRate, typename audioChannels>
-class AudioFrame<ADTS_AAC, audioSampleRate, audioChannels> : public EncodedAudioFrame<ADTS_AAC> {};
+class AudioFrame<AAC, audioSampleRate, audioChannels> : public EncodedAudioFrame<AAC> {};
 
 }
 

@@ -224,12 +224,12 @@ public:
     template <typename Container, typename AudioCodec,
               typename audioSampleRate, typename audioChannels >
     UDPAudioVideoStreamer<Container,
-                           CodecOrFormat, width, height,
-                           AudioCodec, audioSampleRate, audioChannels>&
+                          CodecOrFormat, width, height,
+                          AudioCodec, audioSampleRate, audioChannels>&
     operator >>
     (UDPAudioVideoStreamer<Container,
-                            CodecOrFormat, width, height,
-                            AudioCodec, audioSampleRate, audioChannels>&
+                           CodecOrFormat, width, height,
+                           AudioCodec, audioSampleRate, audioChannels>&
      udpAudioVideoStreamer)
     {
         Medium& m = udpAudioVideoStreamer;

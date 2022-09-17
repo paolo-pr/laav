@@ -28,6 +28,7 @@ extern "C"
 #include <libavcodec/avcodec.h>
 #include <libavutil/imgutils.h>
 #include <libavutil/opt.h>
+#include <libavutil/channel_layout.h>
 }
 
 #include <iostream>
@@ -194,7 +195,7 @@ protected:
         // TODO: is the following line really necessary?
         //avcodec_register_all();
 
-        AVOutputFormat* muxerFormat =
+        const AVOutputFormat* muxerFormat =
         av_guess_format(FFMPEGUtils::translateContainer<Container>(), NULL, NULL);
 
         if (!muxerFormat)
@@ -241,21 +242,21 @@ protected:
         // TODO: improve design. First packets for audio and video
         // are set here in order to obtain a reference in muxNextUsefulFrameFromBuffer
         // in case one of the two media is not set
-        
-        AVPacket audioPkt;
+
+        AVPacket* audioPkt = av_packet_alloc();
         mAudioAVPktsToMux.push_back(audioPkt);
-        av_init_packet(&mAudioAVPktsToMux[0]);
-        mAudioAVPktsToMux[0].pts = AV_NOPTS_VALUE;
-        AVPacket videoPkt;
+        //av_init_packet(&mAudioAVPktsToMux[0]);
+        mAudioAVPktsToMux[0]->pts = AV_NOPTS_VALUE;
+        AVPacket* videoPkt = av_packet_alloc();
         mVideoAVPktsToMux.push_back(videoPkt);
-        av_init_packet(&mVideoAVPktsToMux[0]);
-        mVideoAVPktsToMux[0].pts = AV_NOPTS_VALUE;
+        //av_init_packet(&mVideoAVPktsToMux[0]);
+        mVideoAVPktsToMux[0]->pts = AV_NOPTS_VALUE;
     }
 
     void muxNextUsefulFrameFromBuffer(bool resetChunks)
     {
-        AVPacket& audioPktToMux = mAudioAVPktsToMux[mLastMuxedAudioFrameOffset];
-        AVPacket& videoPktToMux = mVideoAVPktsToMux[mLastMuxedVideoFrameOffset];
+        AVPacket* audioPktToMux = mAudioAVPktsToMux[mLastMuxedAudioFrameOffset];
+        AVPacket* videoPktToMux = mVideoAVPktsToMux[mLastMuxedVideoFrameOffset];
 
         if (!mVideoReady && mMuxVideo)
         {
@@ -266,8 +267,8 @@ protected:
             return;
         }
 
-        if ( (audioPktToMux.pts < videoPktToMux.pts && mMuxAudio) ||
-             ((videoPktToMux.pts ==  AV_NOPTS_VALUE) && mMuxAudio && !mMuxVideo)
+        if ( (audioPktToMux->pts < videoPktToMux->pts && mMuxAudio) ||
+             ((videoPktToMux->pts ==  AV_NOPTS_VALUE) && mMuxAudio && !mMuxVideo)
            )
         {
             if (mLastMuxedAudioFrameOffset != mAudioAVPktsToMuxOffset)
@@ -277,12 +278,16 @@ protected:
                     mMuxedChunksHelper.offset = 0;
                 }
 
-                if (audioPktToMux.size != 0)
+                if (audioPktToMux->size != 0)
                 {
                     if (!mMuxedChunksHelper.latencyValObtained && mMuxedChunksHelper.needsVideoKeyFrame)
                         mMuxedChunksHelper.latencyCounter++;
-                    if (av_write_frame(this->mMuxerContext, &audioPktToMux) < 0)
-                        printAndThrowUnrecoverableError("av_write_frame(...)");               
+                    if (av_write_frame(this->mMuxerContext, audioPktToMux) < 0)
+                        printAndThrowUnrecoverableError("av_write_frame(...)");
+                    //NOTE: the following instruction flushes the muxer's buffer (useful for no-latency streamer)
+                    //TODO: do the same for video too?
+                    if (av_write_frame(this->mMuxerContext, NULL) < 0)
+                        printAndThrowUnrecoverableError("av_write_frame(...)");
                 }
                 
                 mLastMuxedAudioFrameOffset =
@@ -302,7 +307,7 @@ protected:
                 if (!mMuxedChunksHelper.latencyValObtained && mMuxedChunksHelper.needsVideoKeyFrame)
                     mMuxedChunksHelper.latencyCounter++;
                 
-                if (av_write_frame(this->mMuxerContext, &videoPktToMux) < 0)
+                if (av_write_frame(this->mMuxerContext, videoPktToMux) < 0)
                     printAndThrowUnrecoverableError("av_write_frame(...)");
 
                 mLastMuxedVideoFrameOffset =
@@ -344,7 +349,8 @@ protected:
         }      
         avformat_free_context(mMuxerContext);
         av_free(mMuxerAVIOContext);
-
+        av_packet_free(&mVideoAVPktsToMux[0]);
+        av_packet_free(&mAudioAVPktsToMux[0]);
     }
 
     bool mMuxAudio;
@@ -358,10 +364,10 @@ protected:
     std::string mOutputFilename;
     unsigned int mLastMuxedAudioFrameOffset;
     unsigned int mAudioAVPktsToMuxOffset;
-    std::vector<AVPacket> mAudioAVPktsToMux;
+    std::vector<AVPacket* > mAudioAVPktsToMux;
     unsigned int mLastMuxedVideoFrameOffset;
     unsigned int mVideoAVPktsToMuxOffset;
-    std::vector<AVPacket> mVideoAVPktsToMux;
+    std::vector<AVPacket* > mVideoAVPktsToMux;
     AVIOContext* mMuxerAVIOContext;
     uint8_t* mMuxerAVIOContextBuffer;
     unsigned int mAudioStreamIndex;
